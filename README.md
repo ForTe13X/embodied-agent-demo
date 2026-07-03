@@ -83,7 +83,7 @@ The mock navigation server does not return a synthetic `blocked` status. When mo
 | Blocked route | Edge blocked around tick 4-16 | Feedback stagnation for at least 6 ticks | Retry once -> detour replan -> alternative point -> HITL |
 | Unreachable point | Isolated target | `result=unreachable` | Alternative point from a closed candidate set -> degraded report |
 | Sensor fault | `sensor_health=false` | Perception error | Skip/degrade -> pause + HITL |
-| Low battery | Low initial charge with faster drain | Battery watermark on every tick | Snapshot queue -> dock and charge -> resume queued work |
+| Low battery | Low initial charge with faster drain | Battery watermark on every tick | Snapshot queue -> dock and charge -> continue queued work |
 | Tool failure | Timeout or malformed response before perception | Validation failure or timeout | Retry idempotent calls -> circuit break -> degraded failure report |
 | Combined blocked route + low battery | Simultaneous faults | Same signals as above | Safety recovery preempts task recovery |
 
