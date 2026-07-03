@@ -7,6 +7,22 @@
 > 结果表只代表 mock 世界;Phase B(rclpy/Nav2)的接口契约已写好但未执行,见
 > [docs/ADAPTER_CONTRACT.md](docs/ADAPTER_CONTRACT.md)。
 
+## 交付物索引
+
+| 交付物 | 位置 |
+|---|---|
+| 演示录屏(3.4min,中英字幕打轴,edge-tts 女声) | [docs/recording/demo.mp4](docs/recording/demo.mp4)(+ [.srt](docs/recording/demo.srt)) |
+| API 参考(工具/错误码/时序图/expected outputs) | [docs/API.md](docs/API.md) |
+| 用户手册(逐控件截图 + expected outputs) | [docs/USER_MANUAL.md](docs/USER_MANUAL.md) |
+| 测试用例(34 自动化 + 6 联调断言 + 90 run 矩阵) | [docs/TESTCASES.md](docs/TESTCASES.md) |
+| 产品说明(定位/边界/路线图) | [docs/PRODUCT.md](docs/PRODUCT.md) |
+| 回放 Viewer(前端 canvas 动画 + 只读后端) | `python viewer\serve.py` → http://127.0.0.1:8777 |
+| 评测结果 / 预注册 / 评审记录 | [RESULTS.md](RESULTS.md) / [EVAL_PREREG.md](EVAL_PREREG.md) / [REVIEW.md](REVIEW.md) |
+
+媒体管线(截图/联调/录屏)用全局 Python 跑:`python scripts\capture_viewer.py`、
+`python scripts\capture_terminal.py`、`python scripts\recording\build_video.py --all`
+(依赖 playwright/edge-tts/pillow + PATH 里的 ffmpeg;项目 venv 保持精简)。
+
 ## 快速开始
 
 ```powershell
@@ -17,8 +33,10 @@ $env:PYTHONUTF8 = 1                                  # Windows GBK 陷阱防线
 .\.venv\Scripts\python -m pytest tests -q            # 25 个测试,约 1 秒
 .\.venv\Scripts\python run_demo.py --scenario blocked      # 观感演示(真实节奏)
 .\.venv\Scripts\python run_demo.py --scenario restricted --interactive  # HITL 审批
+.\.venv\Scripts\python run_demo.py --nl "去A区巡检a1和a3" --llm   # LM Studio 意图解析(可选)
 .\.venv\Scripts\python run_eval.py                   # 90 run 全矩阵 → RESULTS.md(秒级)
-.\.venv\Scripts\python -m embodied_agent.replay runs\nav_blocked\seed_0.jsonl  # 回放
+.\.venv\Scripts\python viewer\serve.py               # 回放 viewer(canvas 拓扑动画)
+.\.venv\Scripts\python -m embodied_agent.replay runs\nav_blocked\seed_0.jsonl  # CLI 回放
 ```
 
 ## 架构(面试第一张图)

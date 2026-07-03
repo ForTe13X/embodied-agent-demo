@@ -92,8 +92,14 @@ async def run_scenario(args) -> None:
     cond = SCENARIOS[args.scenario]
     intent = None
     if args.nl:
-        intent = rule_parse(args.nl, default_map())
-        console.print(f"[bold]意图解析(规则/离线)[/bold]:{intent.model_dump()}")
+        if args.llm:
+            from embodied_agent.llm_intent import parse_intent
+            intent, source = parse_intent(args.nl, default_map())
+            console.print(f"[bold]意图解析(provider={source})[/bold]:"
+                          f"{intent.model_dump()}")
+        else:
+            intent = rule_parse(args.nl, default_map())
+            console.print(f"[bold]意图解析(规则/离线)[/bold]:{intent.model_dump()}")
     cfg = RunConfig(condition=cond.name, seed=args.seed,
                     fault_specs=fault_specs_for(cond),
                     hitl_rules=cond.hitl_rules,
@@ -142,7 +148,9 @@ def main() -> None:
     parser.add_argument("--interactive", action="store_true",
                         help="HITL 由控制台交互回答")
     parser.add_argument("--nl", default=None,
-                        help="自然语言任务(规则解析,离线)")
+                        help="自然语言任务(默认规则解析,离线)")
+    parser.add_argument("--llm", action="store_true",
+                        help="意图解析走 provider 链:LM Studio → Anthropic → 规则兜底")
     args = parser.parse_args()
     if args.scenario == "restricted":
         asyncio.run(run_restricted_demo(args))

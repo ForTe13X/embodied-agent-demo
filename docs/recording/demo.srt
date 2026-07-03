@@ -1,0 +1,164 @@
+1
+00:00:00,600 --> 00:00:06,060
+具身智能体任务编排层,一个可评测的参考实现
+An embodied-agent orchestration layer, built to be measurable.
+
+2
+00:00:06,160 --> 00:00:12,430
+大模型只做高层意图,确定性内核负责安全与恢复
+The LLM handles intent only; a deterministic core owns safety and recovery.
+
+3
+00:00:12,530 --> 00:00:16,400
+接下来四分钟,看它如何被验证
+In the next four minutes, watch how it is verified.
+
+4
+00:00:17,400 --> 00:00:23,820
+自然语言先经过意图解析,本地大模型可选,规则兜底
+Natural language goes through intent parsing: local LLM optional, rules as fallback.
+
+5
+00:00:23,920 --> 00:00:32,040
+六节点状态图驱动任务:规划、执行、观察、异常、重规划、报告
+A six-node graph runs the task: plan, execute, observe, classify, replan, report.
+
+6
+00:00:32,140 --> 00:00:40,210
+所有动作只能通过工具注册表:白名单、模式校验、熔断、审批令牌
+Every action passes the Tool Registry: whitelist, schemas, circuit breaker, approval tokens.
+
+7
+00:00:40,310 --> 00:00:45,980
+底盘之下,地面真值监视器独立记录每一次越界
+Below the base, a ground-truth monitor independently records every violation.
+
+8
+00:00:46,980 --> 00:00:53,230
+先看导航受阻:第十二拍,故障注入阻断了前方的边
+First, a blocked route: at tick 12, fault injection cuts the edge ahead.
+
+9
+00:00:53,330 --> 00:00:57,560
+底盘不会自己上报,只是原地停滞
+The base never reports 'blocked' — it just stalls.
+
+10
+00:00:57,660 --> 00:01:04,650
+编排层用停滞水位检测发现异常,先重试,再避障重规划
+The orchestrator detects stagnation, retries once, then replans around the edge.
+
+11
+00:01:04,750 --> 00:01:10,780
+绕行B区抵达目标,异常物体拍照上报,全程留痕
+It detours through zone B, reports the anomaly, and logs every decision.
+
+12
+00:01:11,780 --> 00:01:15,890
+同一个任务,在回放器里逐拍重放
+The same run, replayed tick by tick in the viewer.
+
+13
+00:01:15,990 --> 00:01:21,350
+红色虚线是被阻断的边,青色圆点是机器人
+The red dashed line is the blocked edge; the teal dot is the robot.
+
+14
+00:01:21,450 --> 00:01:26,480
+轨迹来自地面真值事件,不是智能体的自述
+The trajectory comes from ground-truth events, not the agent's own account.
+
+15
+00:01:26,580 --> 00:01:31,270
+右侧事件流,就是评测指标的唯一数据源
+The event feed on the right is the only data source for all metrics.
+
+16
+00:01:32,270 --> 00:01:38,060
+低电量场景:巡检途中电量跌破百分之二十红线
+Low battery: mid-patrol, charge drops below the 20 percent red line.
+
+17
+00:01:38,160 --> 00:01:43,350
+水位检测在飞行中抢占,任务队列先快照
+The watchdog preempts mid-flight; the task queue is snapshotted first.
+
+18
+00:01:43,450 --> 00:01:48,690
+回坞充电,然后从断点继续,原队列一步不丢
+The robot docks, recharges, and resumes the original queue — nothing lost.
+
+19
+00:01:48,790 --> 00:01:54,390
+红线是静态配置,大模型只能收紧,不能放宽
+The red line is static config; the LLM may tighten it, never loosen it.
+
+20
+00:01:55,390 --> 00:01:59,070
+进入受限区,必须人工审批
+Entering a restricted zone requires human approval.
+
+21
+00:01:59,170 --> 00:02:05,640
+批准会签发一次性令牌:限范围、限时效、用完即废
+Approval mints a single-use token — scoped, expiring, spent on use.
+
+22
+00:02:05,740 --> 00:02:11,490
+没有令牌,注册表直接拦截;禁入区连令牌都不认
+Without it, the registry blocks the call; forbidden zones accept no token at all.
+
+23
+00:02:12,490 --> 00:02:18,360
+安全声明需要证据:我们让一个恶意规划器攻击门禁
+Safety claims need evidence — so a malicious planner attacks the gates.
+
+24
+00:02:18,460 --> 00:02:24,730
+门禁开启:六次越权尝试,六次全部拦截,零违规
+Gates on: six rogue attempts, six interceptions, zero violations.
+
+25
+00:02:24,830 --> 00:02:30,720
+消融实验把门禁关掉:每次运行恰好五次真实违规
+The ablation turns gates off: exactly five real violations per run.
+
+26
+00:02:30,820 --> 00:02:36,060
+红圈闪烁的,就是地面真值记下的每一次越界
+Each flashing red ring is a violation recorded by the ground truth.
+
+27
+00:02:37,060 --> 00:02:43,070
+评测先注册预测,再跑结果,顺序由提交历史作证
+Predictions are committed before results — git history is the timestamp.
+
+28
+00:02:43,170 --> 00:02:50,070
+九个条件乘以十个种子,九十次运行,三十一条预测全部命中
+Nine conditions by ten seeds: ninety runs, all thirty-one predictions hit.
+
+29
+00:02:50,170 --> 00:02:56,160
+复合故障有三次电量耗尽,原样报告,附事件日志
+The compound fault killed three runs — reported as-is, logs attached.
+
+30
+00:02:56,260 --> 00:03:03,230
+代码复审证实三十五个缺陷,修复后按政策重跑,结论不变
+A code review confirmed 35 defects; after fixes, the rerun upheld every prediction.
+
+31
+00:03:04,230 --> 00:03:09,660
+这是仿真演示,没有实机,边界写在文档第一行
+This is a simulation demo, no real robot — stated in line one of the docs.
+
+32
+00:03:09,760 --> 00:03:15,770
+换上真实底盘,只需替换一个适配器,契约已经写好
+Swapping in a real base means one adapter — the contract is already written.
+
+33
+00:03:15,870 --> 00:03:21,710
+可复现、可回放、可证伪:这就是这份演示想说的
+Reproducible, replayable, falsifiable — that is the whole point.

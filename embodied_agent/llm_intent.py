@@ -1,28 +1,110 @@
 """可选 LLM 意图解析(live demo 层,不在评测环路内 —— 见 EVAL_PREREG.md 确定性边界)。
 
-- 依赖 `anthropic` SDK(可选安装:pip install anthropic)+ ANTHROPIC_API_KEY;
-- 结构化输出:client.messages.parse + pydantic Intent,保证解析结果过 schema;
-- LLM 只产出结构化意图,安全约束(电量红线/受限区/白名单)是静态配置,
-  Intent.model_post_init 强制"只能收紧不能放宽";
-- 任何失败(未装 SDK / 无 key / 网络 / 拒答)→ 回退确定性规则解析,demo 不因 Wi-Fi 挂掉。
+Provider 链(local-first,LLM 永不承重):
+  1. lmstudio  本地 LM Studio(http://localhost:1234/v1,OpenAI 兼容,免费/离线/无 key)
+  2. anthropic 云端 Claude(需 pip install anthropic + ANTHROPIC_API_KEY)
+  3. rule      确定性规则解析(永远可用,评测唯一允许的路径)
+
+任何一级失败(服务未启动 / 超时 / 输出不合 schema / 拒答)→ 顺位降级,demo 不因
+模型或 Wi-Fi 挂掉。LLM 只产出结构化意图;安全约束(电量红线/受限区/白名单)是静态
+配置,Intent.model_post_init 强制"只能收紧不能放宽",且节点白名单式后校验(不信任,验证)。
 """
 from __future__ import annotations
 
+import json
 import os
+import re
+import urllib.error
+import urllib.request
 
 from .intent import Intent, rule_parse
 from .world import TopoMap
 
-MODEL = "claude-opus-4-8"
+LMSTUDIO_BASE = os.environ.get("LMSTUDIO_BASE", "http://localhost:1234/v1")
+LMSTUDIO_MODEL = os.environ.get("LMSTUDIO_MODEL", "qwen2.5-3b")
+LMSTUDIO_TIMEOUT_S = 20  # 本地小模型 CPU 推理偏慢,给足但有限(gotcha:it will be slow)
+ANTHROPIC_MODEL = "claude-opus-4-8"
 
 _SYSTEM = (
-    "你是巡检机器人任务编排层的意图解析器。把用户的自然语言任务解析成结构化 Intent。"
-    "只输出结构化字段,不输出动作或计划。patrol_nodes 只能从拓扑图给出的 free 节点里选;"
-    "battery_floor_pct 不得低于 20(那是静态安全红线,只能收紧)。"
+    "你是巡检机器人任务编排层的意图解析器。把用户的自然语言任务解析成 JSON,"
+    "只输出 JSON 本体,不要 markdown 代码块,不要解释。字段:"
+    '{"patrol_nodes": [节点id数组], "report_anomalies": bool, "battery_floor_pct": number}。'
+    "patrol_nodes 只能从给出的 free 节点里选;battery_floor_pct 不得低于 20"
+    "(静态安全红线,只能收紧)。"
 )
 
 
-def llm_available() -> bool:
+def _free_nodes(topo: TopoMap) -> list[str]:
+    return [n.id for n in topo.nodes.values() if n.access == "free" and n.id != "dock"]
+
+
+def _validate(raw: dict, text: str, topo: TopoMap) -> Intent | None:
+    """白名单式后校验:不信任模型输出,逐字段验证。"""
+    nodes = [n for n in raw.get("patrol_nodes", [])
+             if isinstance(n, str) and topo.has(n) and topo.access(n) == "free"
+             and n != "dock"]
+    if not nodes:
+        return None
+    return Intent(
+        mission=text, patrol_nodes=nodes,
+        report_anomalies=bool(raw.get("report_anomalies", True)),
+        battery_floor_pct=float(raw.get("battery_floor_pct", 20) or 20),
+    )
+
+
+def _extract_json(text: str) -> dict | None:
+    m = re.search(r"\{.*\}", text, re.DOTALL)  # 容忍模型包一层废话/代码块
+    if not m:
+        return None
+    try:
+        obj = json.loads(m.group(0))
+        return obj if isinstance(obj, dict) else None
+    except json.JSONDecodeError:
+        return None
+
+
+# ---- provider: LM Studio(OpenAI 兼容,stdlib 实现,零新依赖) -----------------
+
+def lmstudio_parse(text: str, topo: TopoMap) -> Intent | None:
+    payload = {
+        "model": LMSTUDIO_MODEL,
+        "messages": [
+            {"role": "system", "content": _SYSTEM},
+            {"role": "user",
+             "content": f"可用 free 节点:{_free_nodes(topo)}\n任务:{text}"},
+        ],
+        "temperature": 0,
+        "max_tokens": 300,
+    }
+    req = urllib.request.Request(
+        f"{LMSTUDIO_BASE}/chat/completions",
+        # gotcha:非 ASCII JSON 必须显式 UTF-8 编码 + charset 头
+        data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+        headers={"Content-Type": "application/json; charset=utf-8"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=LMSTUDIO_TIMEOUT_S) as resp:
+            body = json.loads(resp.read().decode("utf-8"))
+        content = body["choices"][0]["message"]["content"]
+    except (urllib.error.URLError, OSError, KeyError, IndexError,
+            json.JSONDecodeError, TimeoutError):
+        return None
+    raw = _extract_json(content)
+    return _validate(raw, text, topo) if raw else None
+
+
+def lmstudio_available() -> bool:
+    try:
+        with urllib.request.urlopen(f"{LMSTUDIO_BASE}/models", timeout=2):
+            return True
+    except (urllib.error.URLError, OSError, TimeoutError):
+        return False
+
+
+# ---- provider: Anthropic(可选云端) -------------------------------------------
+
+def anthropic_available() -> bool:
     if not os.environ.get("ANTHROPIC_API_KEY"):
         return False
     try:
@@ -32,31 +114,37 @@ def llm_available() -> bool:
         return False
 
 
-def parse_intent(text: str, topo: TopoMap) -> tuple[Intent, str]:
-    """返回 (Intent, 来源)。来源 ∈ {'llm', 'rule_fallback'}。"""
-    if not llm_available():
-        return rule_parse(text, topo), "rule_fallback"
+def anthropic_parse(text: str, topo: TopoMap) -> Intent | None:
     try:
         import anthropic
 
         client = anthropic.Anthropic()
-        free_nodes = [n.id for n in topo.nodes.values() if n.access == "free"]
         response = client.messages.parse(
-            model=MODEL,
+            model=ANTHROPIC_MODEL,
             max_tokens=2048,
             system=_SYSTEM,
             messages=[{
                 "role": "user",
-                "content": f"可用 free 节点:{free_nodes}\n任务:{text}",
+                "content": f"可用 free 节点:{_free_nodes(topo)}\n任务:{text}",
             }],
             output_format=Intent,
         )
         intent = response.parsed_output
-        # 白名单式后校验:LLM 给出的节点必须真实存在且 free(不信任,验证)
-        intent.patrol_nodes = [n for n in intent.patrol_nodes
-                               if topo.has(n) and topo.access(n) == "free"]
-        if not intent.patrol_nodes:
-            return rule_parse(text, topo), "rule_fallback"
-        return intent, "llm"
+        return _validate(intent.model_dump(), text, topo)
     except Exception:
-        return rule_parse(text, topo), "rule_fallback"
+        return None
+
+
+# ---- 对外入口:provider 链 ------------------------------------------------------
+
+def parse_intent(text: str, topo: TopoMap) -> tuple[Intent, str]:
+    """返回 (Intent, 来源)。来源 ∈ {'lmstudio', 'anthropic', 'rule_fallback'}。"""
+    if lmstudio_available():
+        intent = lmstudio_parse(text, topo)
+        if intent is not None:
+            return intent, "lmstudio"
+    if anthropic_available():
+        intent = anthropic_parse(text, topo)
+        if intent is not None:
+            return intent, "anthropic"
+    return rule_parse(text, topo), "rule_fallback"
