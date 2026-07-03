@@ -11,7 +11,8 @@
 
 | 交付物 | 位置 |
 |---|---|
-| 演示录屏(3.4min,中英字幕打轴,edge-tts 女声) | [docs/recording/demo.mp4](docs/recording/demo.mp4)(+ [.srt](docs/recording/demo.srt)) |
+| 演示录屏(3.9min,中英字幕打轴,edge-tts 女声,含 POV 场景) | [docs/recording/demo.mp4](docs/recording/demo.mp4)(+ [.srt](docs/recording/demo.srt)) |
+| POV 第一人称渲染管线(Godot 4,真值轨迹驱动,VLM 观测叠加) | [povgen/](povgen/) + [scripts/export_traj.py](scripts/export_traj.py) |
 | API 参考(工具/错误码/时序图/expected outputs) | [docs/API.md](docs/API.md) |
 | 用户手册(逐控件截图 + expected outputs) | [docs/USER_MANUAL.md](docs/USER_MANUAL.md) |
 | 测试用例(34 自动化 + 6 联调断言 + 90 run 矩阵) | [docs/TESTCASES.md](docs/TESTCASES.md) |
