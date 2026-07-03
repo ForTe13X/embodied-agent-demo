@@ -61,7 +61,7 @@ gates_off:恰好 5 真实违规(zone×2 + battery×3)。
 
 ## 2. 前后端联调断言(scripts/capture_viewer.py,可重跑)
 
-`python scripts\capture_viewer.py` **expected:9 条断言全过 + 截图更新**
+`python scripts\capture_viewer.py` **expected:10 条断言全过 + 截图更新**
 
 | # | 断言 | 验证的集成点 |
 |---|---|---|
@@ -73,7 +73,8 @@ gates_off:恰好 5 真实违规(zone×2 + battery×3)。
 | 6 | low_battery t=12 电量条显示 19.4% | 电量派生 → canvas |
 | 7 | POV 三视图模式,t=30 → video 5.17s(偏差<0.2s) | POV 视频与 tick 时间轴同步 |
 | 8 | 整页单屏容纳,无页面滚动 | 指挥台 grid 布局约束 |
-| 9 | 无 POV 视频 run 自动退化双栏 | body.no-pov 布局切换 |
+| 9 | 连续播放 2.5s 后 POV 实际前进(>1s) | seek 风暴/卡帧回归(Range+faststart+纠偏护栏) |
+| 10 | 无 POV 视频 run 自动退化双栏 | body.no-pov 布局切换 |
 
 注:断言 2/5/6 的具体数值锚定当前 runs/(commit 内附);重跑评测后数值可能变化,断言逻辑不变。
 

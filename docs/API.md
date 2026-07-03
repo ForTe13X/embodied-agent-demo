@@ -102,6 +102,7 @@ Phase B 止损线见 [ADAPTER_CONTRACT.md](ADAPTER_CONTRACT.md)。
 |---|---|---|
 | `GET /api/runs` | — | `[{"condition":"baseline","seed":0},…]`(90 项) |
 | `GET /api/log` | `condition`(`^[a-z0-9_]+$`)、`seed`(数字) | 事件数组;参数不合法 `400 {"error":"bad params"}`;不存在 `404` |
+| `GET /pov/<name>.mp4` | 支持 HTTP `Range`(浏览器视频 seek 依赖) | `206 Partial Content` + `Content-Range`;越界 `416` |
 | `GET /` | — | viewer 静态页 |
 
 安全:路径白名单校验,不接受任意路径;**只读**——viewer 是审计工具,所有写操作只能走 Tool Registry。

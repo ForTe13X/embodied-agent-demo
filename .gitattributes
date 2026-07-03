@@ -1,0 +1,12 @@
+# 容器内 bash 执行的脚本必须 LF(CRLF 会让 shebang/语法直接报错)
+*.sh text eol=lf
+# 事件日志按字节比较(确定性回归),锁 LF
+*.jsonl text eol=lf
+*.py text
+*.md text
+*.yaml text
+*.html text
+*.gd text
+*.png binary
+*.mp4 binary
+*.mp3 binary

@@ -24,8 +24,9 @@ perceive 时刻叠加 VLM 结构化观测(bbox + label + confidence,绝不返回
 docker exec gamecraft-runner bash /games/povgen/shots.sh
 docker exec gamecraft-runner bash /games/povgen/render.sh
 
-# 4. 合成
-ffmpeg -framerate 30 -i frames\f_%05d.png -c:v libx264 -pix_fmt yuv420p clip_pov.mp4
+# 4. 合成(给 viewer 同步用的必须加密集关键帧 + faststart,否则浏览器 seek 会卡帧)
+ffmpeg -framerate 30 -i frames_blocked\f_%05d.png -c:v libx264 -pix_fmt yuv420p `
+  -g 15 -bf 0 -movflags +faststart viewer\pov\nav_blocked_seed0.mp4
 ```
 
 本仓库的 povgen/ 是源码存档;运行时需拷到 runner 挂载的 games 目录(见 shots.sh 内路径)。

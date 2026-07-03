@@ -1,23 +1,24 @@
 # Embodied Agent Task Planner(仿真 demo)
 
-> LLM 只做高层意图,**确定性 Tool + 状态机 + 异常恢复兜底**的具身 Agent 编排层。
-> 差异化 = **评测优先**:预注册故障注入 × 10 seed × 指标表,未恢复 case 原样报。
+> 一个具身机器人 Agent 的编排层:**大模型只负责听懂任务,导航、恢复、安全全部交给
+> 确定性代码**。它和多数 agent demo 的区别在于把评测放在第一位——预测先提交、
+> 故障预注册、10 个种子跑分,没恢复成功的 case 原样放进报告。
 >
-> **诚实边界声明:这是 mock adapter 上的仿真 demo,无实机、无真实 Nav2。**
-> 结果表只代表 mock 世界;Phase B(rclpy/Nav2)的接口契约已写好但未执行,见
+> **先说清楚边界:这是 mock 底盘上的仿真 demo,没有实机,也没接真实 Nav2。**
+> 结果表只代表 mock 世界;换真实底盘的接口契约已经写好但还没跑过,见
 > [docs/ADAPTER_CONTRACT.md](docs/ADAPTER_CONTRACT.md)。
 
 ## 交付物索引
 
 | 交付物 | 位置 |
 |---|---|
-| 演示录屏(3.9min,中英字幕打轴,edge-tts 女声,含 POV 场景) | [docs/recording/demo.mp4](docs/recording/demo.mp4)(+ [.srt](docs/recording/demo.srt)) |
+| 演示录屏(约 4 分钟,中英双语字幕,edge-tts 女声,三视图同轴实录) | [docs/recording/demo.mp4](docs/recording/demo.mp4)(+ [.srt](docs/recording/demo.srt)) |
 | POV 第一人称渲染管线(Godot 4,真值轨迹驱动,VLM 观测叠加) | [povgen/](povgen/) + [scripts/export_traj.py](scripts/export_traj.py) |
 | 真 VLM 实跑(qwen3-vl-4b 本地推理巡检帧,含诚实局限记录) | [scripts/vlm_annotate.py](scripts/vlm_annotate.py) → [标注帧](docs/screenshots/vlm_live_annotated.png) |
 | viewer POV 同步面板 + 三条 POV 视频(含消融违规红闪) | [viewer/pov/](viewer/pov/) |
 | API 参考(工具/错误码/时序图/expected outputs) | [docs/API.md](docs/API.md) |
 | 用户手册(逐控件截图 + expected outputs) | [docs/USER_MANUAL.md](docs/USER_MANUAL.md) |
-| 测试用例(34 自动化 + 6 联调断言 + 90 run 矩阵) | [docs/TESTCASES.md](docs/TESTCASES.md) |
+| 测试用例(34 自动化 + 10 联调断言 + 90 run 矩阵) | [docs/TESTCASES.md](docs/TESTCASES.md) |
 | 产品说明(定位/边界/路线图) | [docs/PRODUCT.md](docs/PRODUCT.md) |
 | 回放 Viewer(前端 canvas 动画 + 只读后端) | `python viewer\serve.py` → http://127.0.0.1:8777 |
 | 评测结果 / 预注册 / 评审记录 | [RESULTS.md](RESULTS.md) / [EVAL_PREREG.md](EVAL_PREREG.md) / [REVIEW.md](REVIEW.md) |
@@ -33,7 +34,7 @@ python -m venv .venv
 .\.venv\Scripts\python -m pip install -r requirements.txt
 $env:PYTHONUTF8 = 1                                  # Windows GBK 陷阱防线
 
-.\.venv\Scripts\python -m pytest tests -q            # 25 个测试,约 1 秒
+.\.venv\Scripts\python -m pytest tests -q            # 34 个测试,几秒钟
 .\.venv\Scripts\python run_demo.py --scenario blocked      # 观感演示(真实节奏)
 .\.venv\Scripts\python run_demo.py --scenario restricted --interactive  # HITL 审批
 .\.venv\Scripts\python run_demo.py --nl "去A区巡检a1和a3" --llm   # LM Studio 意图解析(可选)
