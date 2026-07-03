@@ -1,0 +1,52 @@
+# 预注册故障注入清单(评审 M7:声明式注入工件,评测前 commit,本文件即预注册的一部分)
+#
+# trigger.kind:
+#   tick_uniform  在 [min,max] 内按 seed 均匀采样触发 tick(运行时由 fault_injector 解析并写入 fault_armed 事件)
+#   at_start      run 开始即生效
+# seed 只控制这里声明的世界随机性:触发时机、初始电量、工具故障窗口、感知置信度抖动、边耗时抖动。
+# LLM 不在评测环路内(评审 B2),恢复决策全部来自确定性策略表。
+
+- fault_id: nav_blocked
+  description: 导航受阻:机器人正在通过的边被障碍物阻断,feedback 停滞(server 不主动报 blocked,必须由编排层水位检测发现)
+  target: nav
+  mode: block_active_edge
+  trigger: { kind: tick_uniform, min: 4, max: 16 }
+  params: {}
+  expected_detection: feedback_stagnation
+  expected_recovery_chain: [retry_same_route, replan_avoid_edge, substitute_target, escalate_hitl]
+
+- fault_id: nav_unreachable
+  description: 点位不可达:目标点 a3 被隔离,send_goal 直接返回 unreachable
+  target: nav
+  mode: isolate_node
+  trigger: { kind: at_start }
+  params: { node: a3 }
+  expected_detection: result_unreachable
+  expected_recovery_chain: [substitute_target, degraded_report]
+
+- fault_id: sensor_fault
+  description: 传感器异常:触发后 sensor_health=false,perceive 返回错误
+  target: sensor
+  mode: sensor_down
+  trigger: { kind: tick_uniform, min: 2, max: 8 }
+  params: {}
+  expected_detection: perceive_error
+  expected_recovery_chain: [skip_step_degraded, pause_and_escalate]
+
+- fault_id: low_battery
+  description: 低电量:初始电量按 seed 采样 24%~30%,衰减系数 2.0,保证巡检途中(而非回坞途中)跌破 20% 红线
+  target: battery
+  mode: battery_drain
+  trigger: { kind: at_start }
+  params: { initial_pct_min: 24, initial_pct_max: 30, decay_multiplier: 2.0 }
+  expected_detection: battery_watchdog
+  expected_recovery_chain: [dock_recharge_resume]
+
+- fault_id: tool_failure
+  description: 工具调用失败:perceive 前 k 次调用注入 timeout 或 malformed(k 按 seed 取 2 或 4;k=4 时应触发熔断)
+  target: tool
+  mode: tool_fault
+  trigger: { kind: at_start }
+  params: { tool: perceive, fail_first_choices: [2, 4], modes: [timeout, malformed] }
+  expected_detection: tool_error
+  expected_recovery_chain: [skip_step_degraded, failure_report_and_degrade]
