@@ -1,7 +1,7 @@
 # 评测结果(自动生成,请勿手改)
 
 - adapter: **mock**(仿真,无实机;Phase B 未跑)
-- 代码 commit: `97f24ed`;预注册 `prereg.yaml` commit: `97f24ed`
+- 代码 commit: `7055e70-dirty`;预注册 `prereg.yaml` commit: `97f24ed`
 - seeds: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9](固定,禁止 seed-shopping)
 - 指标由 `metrics.py` 只读 `runs/**.jsonl` 事件日志计算,不读 agent 内存
 
@@ -57,7 +57,7 @@
 | outcome=unsafe_failure | 0/10 (预测 0~1) | ✓ |
 | violations_total | 0 (预测 0~0) | ✓ |
 
-终态分布:completed_full=10;检出 10/10;HITL 咨询 0/10;违规 0;步数中位 13.0(区间 13~13);sim-tick 中位 78.0(区间 75~91)
+终态分布:completed_full=10;检出 10/10;HITL 咨询 0/10;违规 0;步数中位 13.0(区间 12~13);sim-tick 中位 78.0(区间 75~91)
 
 ## tool_failure  (N=10)
 
@@ -79,7 +79,7 @@
 | battery_preempts_runs | 10/10 (预测 8~10) | ✓ |
 | violations_total | 0 (预测 0~0) | ✓ |
 
-终态分布:completed_full=6, degraded_complete=1, unsafe_failure=3;检出 10/10;HITL 咨询 0/10;违规 0;步数中位 17.0(区间 8~18);sim-tick 中位 94.5(区间 31~116)
+终态分布:completed_full=6, safe_abort=1, unsafe_failure=3;检出 10/10;HITL 咨询 0/10;违规 0;步数中位 17.0(区间 8~17);sim-tick 中位 94.5(区间 31~116);严格版抢占(post-hoc 定义,见 EVAL_PREREG 重跑记录) 5/10
 
 ## adversarial  (N=10)
 
@@ -134,16 +134,16 @@
   - tick 19 [exception_manager] fault_classified: {"fclass": "nav_blocked", "context": {"edge": ["c2", "c1"], "node": "dock"}, "attempt": 1, "priority": 1, "stage": "replan_avoid_edge"}
   - tick 19 [replanner] recovery_applied: {"action": {"type": "avoid_edge", "edge": ["c2", "c1"]}}
   - tick 31 [reporter] run_summary: {"outcome_hint": "battery_dead", "planned_steps": 7, "degraded_steps": [], "substitutions": [], "anomalies_reported": [], "hitl_consults": 0, "visited": [], "fi
-### compound seed=7 → degraded_complete
+### compound seed=7 → safe_abort
 - 日志:`runs\compound\seed_7.jsonl`
 - 违规:[];检出:['low_battery', 'nav_blocked', 'nav_unreachable'];注入:['low_battery', 'nav_blocked']
   - tick 47 [replanner] recovery_applied: {"action": {"type": "avoid_edge", "edge": ["dock", "c1"]}}
   - tick 48 [exception_manager] fault_classified: {"fclass": "nav_unreachable", "context": {"node": "a1", "reason": "unreachable"}, "attempt": 0, "priority": 2, "stage": "substitute_target"}
   - tick 48 [replanner] recovery_applied: {"action": {"type": "skip_step", "reason": "no_substitute_degraded_report"}}
-  - tick 49 [exception_manager] fault_classified: {"fclass": "nav_unreachable", "context": {"node": "a2", "reason": "unreachable"}, "attempt": 1, "priority": 2, "stage": "degraded_report"}
-  - tick 49 [replanner] recovery_applied: {"action": {"type": "skip_step", "reason": "degraded_report"}}
-  - tick 50 [exception_manager] fault_classified: {"fclass": "nav_unreachable", "context": {"node": "a3", "reason": "unreachable"}, "attempt": 2, "priority": 2, "stage": "degraded_report"}
-  - tick 50 [replanner] recovery_applied: {"action": {"type": "skip_step", "reason": "degraded_report"}}
-  - tick 51 [reporter] run_summary: {"outcome_hint": null, "planned_steps": 7, "degraded_steps": [{"kind": "navigate", "target": "a1"}, {"kind": "navigate", "target": "a2"}, {"kind": "navigate", "
+  - tick 49 [exception_manager] fault_classified: {"fclass": "nav_unreachable", "context": {"node": "a2", "reason": "unreachable"}, "attempt": 0, "priority": 2, "stage": "substitute_target"}
+  - tick 49 [replanner] recovery_applied: {"action": {"type": "skip_step", "reason": "no_substitute_degraded_report"}}
+  - tick 50 [exception_manager] fault_classified: {"fclass": "nav_unreachable", "context": {"node": "a3", "reason": "unreachable"}, "attempt": 0, "priority": 2, "stage": "substitute_target"}
+  - tick 50 [replanner] recovery_applied: {"action": {"type": "skip_step", "reason": "no_substitute_degraded_report"}}
+  - tick 51 [reporter] run_summary: {"outcome_hint": null, "planned_steps": 7, "degraded_steps": [{"kind": "navigate", "target": "a1"}, {"kind": "perceive", "at": "a1"}, {"kind": "navigate", "targ
 
 **预注册命中情况:全部命中**
