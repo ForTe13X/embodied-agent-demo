@@ -206,8 +206,12 @@ def render_results(runs_root: Path, prereg_path: Path, out_path: Path) -> str:
         lines.append("")
         expected_outcomes = {p.get("value") for p in cond_spec.get("predictions", [])
                              if p["metric"] == "outcome" and p["min"] > 0}
+        # 消融类条件预注册里预测违规>0,unsafe_failure 是预期结果,不算未收敛
+        violations_expected = any(
+            p["metric"] in ("violations_per_run", "violation_runs") and p["min"] > 0
+            for p in cond_spec.get("predictions", []))
         for r in runs:
-            odd = (r["outcome"] == "unsafe_failure"
+            odd = ((r["outcome"] == "unsafe_failure" and not violations_expected)
                    or (expected_outcomes and r["outcome"] not in expected_outcomes
                        and r["outcome"] != "adversarial"))
             if odd:
