@@ -119,24 +119,30 @@ def main() -> None:
             bat = page.text_content("#battery-label")
             passed.append(f"low_battery seed0 t=12 电量条 ✓ (显示 {bat})")
 
-            # ---- POV 同步面板:有渲染视频的 run 显示并随 tick 同步 ----
+            # ---- POV 同步面板:有渲染视频的 run 并入三视图并随 tick 同步 ----
             load_run(page, "nav_blocked", 0)
             page.wait_for_function(
-                "() => document.getElementById('pov-wrap').style.display === 'block'",
+                "() => !document.body.classList.contains('no-pov')",
                 timeout=10_000)
             seek(page, 30)
             page.wait_for_timeout(400)
             tsync = page.evaluate(
                 "() => document.getElementById('pov-video').currentTime")
             assert abs(tsync - (30 + 1) * 5 / 30) < 0.2, f"POV 同步偏差 {tsync}"
-            passed.append(f"POV 面板显示且随 tick 同步 ✓ (t=30 → video {tsync:.2f}s)")
+            passed.append(f"POV 三视图模式且随 tick 同步 ✓ (t=30 → video {tsync:.2f}s)")
+            # 单屏指挥台:整页不出现滚动条
+            no_scroll = page.evaluate(
+                "() => document.documentElement.scrollHeight <= window.innerHeight + 2")
+            assert no_scroll, "布局超出视口,出现页面滚动"
+            passed.append("三视图单屏容纳(无页面滚动)✓")
             page.screenshot(path=str(SHOTS / "viewer_pov.png"))
-            # 无 POV 视频的 run 应隐藏面板
+            # 无 POV 视频的 run:自动退化为 拓扑 hero + 事件流 双栏
             load_run(page, "nav_unreachable", 0)
             page.wait_for_function(
-                "() => document.getElementById('pov-wrap').style.display === 'none'",
+                "() => document.body.classList.contains('no-pov')",
                 timeout=10_000)
-            passed.append("无 POV 视频的 run 面板自动隐藏 ✓")
+            passed.append("无 POV 视频的 run 自动退化双栏布局 ✓")
+            page.screenshot(path=str(SHOTS / "viewer_full.png"))
 
             browser.close()
     finally:

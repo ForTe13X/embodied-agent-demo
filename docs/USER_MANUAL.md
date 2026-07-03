@@ -87,12 +87,23 @@ python viewer\serve.py          # expected: replay viewer: http://127.0.0.1:8777
 只显示决策级事件(≤当前 tick),按 actor 配色:红=故障注入/安全监视,黄=异常管理,
 紫=重规划,青=HITL,绿=报告。数据即 `runs/**.jsonl` 原文,无二次加工。
 
-## 4.4 POV 同步面板(viewer 内)
+## 4.4 三视图指挥台布局(POV + 拓扑 + 事件流,单屏同轴)
 
 有预渲染 POV 视频的 run(`viewer/pov/<condition>_seed<N>.mp4`,现有 nav_blocked/
-low_battery/ablation_gates_off 各 seed0),加载后 canvas 右侧自动出现第一人称画面,
-**随 tick 滑杆逐帧同步**(见 [viewer_pov.png](screenshots/viewer_pov.png));
-无视频的 run 面板自动隐藏。消融 run 的 POV 在每次地面真值违规时全屏红闪。
+low_battery/ablation_gates_off 各 seed0)自动进入**三视图模式**,共用同一根 tick 时间轴,
+整页单屏容纳、无页面滚动(联调断言锁定):
+
+![三视图指挥台](screenshots/viewer_pov.png)
+
+| 区域 | 比例 | 内容 |
+|---|---|---|
+| 控制条 | 全宽 ~48px | 标题 + run 选择 + 播放控制 + tick/电量/违规/终态 chips |
+| 左列 | 58%,跨两行 | POV 第一人称(黑底等比 contain,随 tick 逐帧同步,偏差 <0.2s) |
+| 右上 | 42% × 46% | 拓扑地图(canvas 等比缩放,图例悬浮左下) |
+| 右下 | 42% × 54% | 决策事件流(面板标题固定,内部滚动,按 actor 配色) |
+
+无 POV 视频的 run 自动退化为**双栏**:拓扑升为左侧 hero(58%)+ 事件流右栏(42%)。
+消融 run 的 POV 在每次地面真值违规时全屏红闪。
 
 ## 4.5 POV 第一人称视频(可选,视觉演示)
 
