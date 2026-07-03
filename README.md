@@ -4,6 +4,10 @@
 
 This repository focuses on the control layer around a robot-like agent: task planning, tool gating, fault recovery, replay, and repeatable evaluation. It does not claim real-robot validation. The current backend is a mock navigation server with a `RobotAdapter` contract prepared for a future Nav2/rclpy integration. See [docs/ADAPTER_CONTRACT.md](docs/ADAPTER_CONTRACT.md) for the adapter boundary.
 
+![Demo excerpt: mission-control replay around a blocked edge, first-person view reaching the crate stack, the VLM locking onto the anomaly, and the gates-off ablation flashing ground-truth violations](docs/recording/demo.gif)
+
+*16-second excerpt. Full 4-minute narrated video: [docs/recording/demo.mp4](docs/recording/demo.mp4)*
+
 ## What Is Included
 
 | Artifact | Location |
