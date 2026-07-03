@@ -2,6 +2,10 @@
 
 [中文](#中文) | [English](#english)
 
+![演示节选 / Demo excerpt:三视图指挥台绕行受阻边、POV 撞上箱堆、VLM 锁定异常、消融违规红闪](docs/recording/demo.gif)
+
+*16 秒节选,完整 4 分钟配音版见 [docs/recording/demo.mp4](docs/recording/demo.mp4) · 16-second excerpt; full narrated video: [demo.mp4](docs/recording/demo.mp4)*
+
 ## 中文
 
 一个具身机器人 Agent 编排层仿真 demo。大模型只负责意图解析；导航、恢复、安全检查和评测都由确定性代码处理。
