@@ -166,8 +166,23 @@ const POV_FPT = 5, POV_FPS = 30;
 function syncPov() {
   const pov = $("pov-video");
   if (document.body.classList.contains("no-pov") || !pov.duration) return;
-  pov.currentTime = Math.min(pov.duration - 0.03, (cur + 1) * POV_FPT / POV_FPS);
+  const want = Math.min(pov.duration - 0.03, (cur + 1) * POV_FPT / POV_FPS);
+  pov.dataset.want = want;
+  // seek 排队化:进行中的 seek 不打断(连续打断会让画面永远停在旧帧),
+  // onseeked 里再补齐最新目标
+  if (!pov.seeking) pov.currentTime = want;
 }
+document.addEventListener("DOMContentLoaded", () => {
+  const pov = $("pov-video");
+  pov.onseeked = () => {
+    const w = parseFloat(pov.dataset.want || "0");
+    // 每个目标只纠偏一次:seek 异常落点时防止重寻址风暴
+    if (Math.abs(pov.currentTime - w) > 0.06 && pov.dataset.corrected !== pov.dataset.want) {
+      pov.dataset.corrected = pov.dataset.want;
+      pov.currentTime = w;
+    }
+  };
+});
 
 function robotPos(t) {
   let prev = entries[0], next = null;

@@ -54,131 +54,131 @@ The orchestrator detects stagnation, retries once, then replans around the edge.
 It detours through zone B, reports the anomaly, and logs every decision.
 
 12
-00:01:11,780 --> 00:01:15,890
-同一个任务,在回放器里逐拍重放
-The same run, replayed tick by tick in the viewer.
+00:01:11,780 --> 00:01:20,430
+同一个任务,在指挥台里三视图同轴重放:第一人称、拓扑轨迹、决策日志
+The same run replays in mission control — POV, topo map, decision log on one timeline.
 
 13
-00:01:15,990 --> 00:01:21,350
-红色虚线是被阻断的边,青色圆点是机器人
-The red dashed line is the blocked edge; the teal dot is the robot.
+00:01:20,530 --> 00:01:26,920
+拓扑图上,红色虚线是被阻断的边,青色圆点是机器人
+On the map, the red dashed line is the blocked edge; the teal dot is the robot.
 
 14
-00:01:21,450 --> 00:01:26,480
+00:01:27,020 --> 00:01:32,050
 轨迹来自地面真值事件,不是智能体的自述
 The trajectory comes from ground-truth events, not the agent's own account.
 
 15
-00:01:26,580 --> 00:01:31,270
-右侧事件流,就是评测指标的唯一数据源
-The event feed on the right is the only data source for all metrics.
+00:01:32,150 --> 00:01:36,820
+右下事件流,就是评测指标的唯一数据源
+The event feed is the only data source for all metrics.
 
 16
-00:01:32,270 --> 00:01:39,170
+00:01:37,820 --> 00:01:44,720
 再换第一人称:同一次任务,仓库由同一张拓扑图程序化生成
 Now in first person — a warehouse generated from the same topology.
 
 17
-00:01:39,270 --> 00:01:45,110
+00:01:44,820 --> 00:01:50,660
 相机沿地面真值轨迹运动,与事件日志逐拍对齐
 The camera follows the ground-truth trajectory, tick-aligned with the log.
 
 18
-00:01:45,210 --> 00:01:51,920
+00:01:50,760 --> 00:01:57,470
 前方箱堆,就是那条被注入的受阻边:停滞、倒车、绕行
 The crate stack ahead is the injected blocked edge: stall, back off, detour.
 
 19
-00:01:52,020 --> 00:02:01,010
+00:01:57,570 --> 00:02:06,560
 感知时刻,视觉模型的结构化观测叠加在画面上:标签加置信度,绝不返回动作
 At perceive, the VLM overlay shows label and confidence — structured observation, never actions.
 
 20
-00:02:02,010 --> 00:02:07,800
+00:02:07,560 --> 00:02:13,350
 低电量场景:巡检途中电量跌破百分之二十红线
 Low battery: mid-patrol, charge drops below the 20 percent red line.
 
 21
-00:02:07,900 --> 00:02:13,090
+00:02:13,450 --> 00:02:18,640
 水位检测在飞行中抢占,任务队列先快照
 The watchdog preempts mid-flight; the task queue is snapshotted first.
 
 22
-00:02:13,190 --> 00:02:18,430
+00:02:18,740 --> 00:02:23,980
 回坞充电,然后从断点继续,原队列一步不丢
 The robot docks, recharges, and resumes the original queue — nothing lost.
 
 23
-00:02:18,530 --> 00:02:24,130
+00:02:24,080 --> 00:02:29,680
 红线是静态配置,大模型只能收紧,不能放宽
 The red line is static config; the LLM may tighten it, never loosen it.
 
 24
-00:02:25,130 --> 00:02:28,810
+00:02:30,680 --> 00:02:34,360
 进入受限区,必须人工审批
 Entering a restricted zone requires human approval.
 
 25
-00:02:28,910 --> 00:02:35,380
+00:02:34,460 --> 00:02:40,930
 批准会签发一次性令牌:限范围、限时效、用完即废
 Approval mints a single-use token — scoped, expiring, spent on use.
 
 26
-00:02:35,480 --> 00:02:41,230
+00:02:41,030 --> 00:02:46,780
 没有令牌,注册表直接拦截;禁入区连令牌都不认
 Without it, the registry blocks the call; forbidden zones accept no token at all.
 
 27
-00:02:42,230 --> 00:02:48,100
+00:02:47,780 --> 00:02:53,650
 安全声明需要证据:我们让一个恶意规划器攻击门禁
 Safety claims need evidence — so a malicious planner attacks the gates.
 
 28
-00:02:48,200 --> 00:02:54,470
+00:02:53,750 --> 00:03:00,020
 门禁开启:六次越权尝试,六次全部拦截,零违规
 Gates on: six rogue attempts, six interceptions, zero violations.
 
 29
-00:02:54,570 --> 00:03:00,460
+00:03:00,120 --> 00:03:06,010
 消融实验把门禁关掉:每次运行恰好五次真实违规
 The ablation turns gates off: exactly five real violations per run.
 
 30
-00:03:00,560 --> 00:03:05,800
+00:03:06,110 --> 00:03:11,350
 红圈闪烁的,就是地面真值记下的每一次越界
 Each flashing red ring is a violation recorded by the ground truth.
 
 31
-00:03:06,800 --> 00:03:12,810
+00:03:12,350 --> 00:03:18,360
 评测先注册预测,再跑结果,顺序由提交历史作证
 Predictions are committed before results — git history is the timestamp.
 
 32
-00:03:12,910 --> 00:03:19,810
+00:03:18,460 --> 00:03:25,360
 九个条件乘以十个种子,九十次运行,三十一条预测全部命中
 Nine conditions by ten seeds: ninety runs, all thirty-one predictions hit.
 
 33
-00:03:19,910 --> 00:03:25,900
+00:03:25,460 --> 00:03:31,450
 复合故障有三次电量耗尽,原样报告,附事件日志
 The compound fault killed three runs — reported as-is, logs attached.
 
 34
-00:03:26,000 --> 00:03:32,970
+00:03:31,550 --> 00:03:38,520
 代码复审证实三十五个缺陷,修复后按政策重跑,结论不变
 A code review confirmed 35 defects; after fixes, the rerun upheld every prediction.
 
 35
-00:03:33,970 --> 00:03:39,400
+00:03:39,520 --> 00:03:44,950
 这是仿真演示,没有实机,边界写在文档第一行
 This is a simulation demo, no real robot — stated in line one of the docs.
 
 36
-00:03:39,500 --> 00:03:45,510
+00:03:45,050 --> 00:03:51,060
 换上真实底盘,只需替换一个适配器,契约已经写好
 Swapping in a real base means one adapter — the contract is already written.
 
 37
-00:03:45,610 --> 00:03:51,450
+00:03:51,160 --> 00:03:57,000
 可复现、可回放、可证伪:这就是这份演示想说的
 Reproducible, replayable, falsifiable — that is the whole point.

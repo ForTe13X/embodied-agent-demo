@@ -135,6 +135,15 @@ def main() -> None:
                 "() => document.documentElement.scrollHeight <= window.innerHeight + 2")
             assert no_scroll, "布局超出视口,出现页面滚动"
             passed.append("三视图单屏容纳(无页面滚动)✓")
+            # 回归:连续播放时 POV 画面必须实际前进(seek 互相中止曾导致卡帧)
+            seek(page, 0)
+            page.click("#play-btn")
+            page.wait_for_timeout(2500)
+            page.click("#play-btn")
+            adv = page.evaluate(
+                "() => document.getElementById('pov-video').currentTime")
+            assert adv > 1.0, f"播放 2.5s 后 POV 仍停在 {adv:.2f}s(卡帧回归)"
+            passed.append(f"播放中 POV 持续前进 ✓ (2.5s → video {adv:.2f}s)")
             page.screenshot(path=str(SHOTS / "viewer_pov.png"))
             # 无 POV 视频的 run:自动退化为 拓扑 hero + 事件流 双栏
             load_run(page, "nav_unreachable", 0)

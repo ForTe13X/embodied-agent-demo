@@ -37,6 +37,10 @@ class Handler(SimpleHTTPRequestHandler):
 
     def do_GET(self):
         url = urlparse(self.path)
+        # /pov/*.mp4 需要 HTTP Range(206):Chromium 的 <video> 寻址依赖字节范围,
+        # SimpleHTTPRequestHandler 不支持会导致 seek 永远落回 0(复现于三视图同步)
+        if url.path.startswith("/pov/") and url.path.endswith(".mp4"):
+            return self._serve_ranged(url.path)
         if url.path == "/api/runs":
             runs = []
             if RUNS_DIR.is_dir():
@@ -62,6 +66,54 @@ class Handler(SimpleHTTPRequestHandler):
                       if line.strip()]
             return self._json(events)
         return super().do_GET()
+
+    def _serve_ranged(self, path: str) -> None:
+        name = path.rsplit("/", 1)[-1]
+        if "/" in name or "\\" in name or ".." in name:
+            return self._json({"error": "bad path"}, 400)
+        f = ROOT / "pov" / name
+        if not f.is_file():
+            self.send_response(404)
+            self.end_headers()
+            return
+        size = f.stat().st_size
+        start, end = 0, size - 1
+        rng = self.headers.get("Range")
+        status = 200
+        if rng and rng.startswith("bytes="):
+            spec = rng[6:].split(",")[0].strip()
+            s, _, e = spec.partition("-")
+            if s:
+                start = int(s)
+                end = int(e) if e else size - 1
+            elif e:  # suffix: bytes=-N
+                start = max(0, size - int(e))
+            end = min(end, size - 1)
+            if start > end or start >= size:
+                self.send_response(416)
+                self.send_header("Content-Range", f"bytes */{size}")
+                self.end_headers()
+                return
+            status = 206
+        self.send_response(status)
+        self.send_header("Content-Type", "video/mp4")
+        self.send_header("Accept-Ranges", "bytes")
+        self.send_header("Content-Length", str(end - start + 1))
+        if status == 206:
+            self.send_header("Content-Range", f"bytes {start}-{end}/{size}")
+        self.end_headers()
+        with open(f, "rb") as fh:
+            fh.seek(start)
+            remaining = end - start + 1
+            while remaining > 0:
+                chunk = fh.read(min(65536, remaining))
+                if not chunk:
+                    break
+                try:
+                    self.wfile.write(chunk)
+                except (ConnectionAbortedError, BrokenPipeError):
+                    break
+                remaining -= len(chunk)
 
     def log_message(self, fmt, *args):  # 安静
         pass

@@ -57,14 +57,14 @@ LINES = [
         "The orchestrator detects stagnation, retries once, then replans around the edge."),
     (3, "绕行B区抵达目标,异常物体拍照上报,全程留痕",
         "It detours through zone B, reports the anomaly, and logs every decision."),
-    (4, "同一个任务,在回放器里逐拍重放",
-        "The same run, replayed tick by tick in the viewer."),
-    (4, "红色虚线是被阻断的边,青色圆点是机器人",
-        "The red dashed line is the blocked edge; the teal dot is the robot."),
+    (4, "同一个任务,在指挥台里三视图同轴重放:第一人称、拓扑轨迹、决策日志",
+        "The same run replays in mission control — POV, topo map, decision log on one timeline."),
+    (4, "拓扑图上,红色虚线是被阻断的边,青色圆点是机器人",
+        "On the map, the red dashed line is the blocked edge; the teal dot is the robot."),
     (4, "轨迹来自地面真值事件,不是智能体的自述",
         "The trajectory comes from ground-truth events, not the agent's own account."),
-    (4, "右侧事件流,就是评测指标的唯一数据源",
-        "The event feed on the right is the only data source for all metrics."),
+    (4, "右下事件流,就是评测指标的唯一数据源",
+        "The event feed is the only data source for all metrics."),
     (5, "再换第一人称:同一次任务,仓库由同一张拓扑图程序化生成",
         "Now in first person — a warehouse generated from the same topology."),
     (5, "相机沿地面真值轨迹运动,与事件日志逐拍对齐",
@@ -246,6 +246,13 @@ def capture_clips() -> None:
                 page.wait_for_function(
                     "key => document.body.dataset.loaded === key", arg=k)
                 page.select_option("#speed-select", str(tps))
+                # 三视图:等 POV 视频就绪(有的话)再开播,录进同轴画面
+                try:
+                    page.wait_for_function(
+                        "() => !document.body.classList.contains('no-pov')",
+                        timeout=8_000)
+                except Exception:
+                    pass  # 该 run 无 POV,双栏布局照录
                 if start:
                     page.evaluate(
                         "t => { const s = document.getElementById('tick-slider');"
