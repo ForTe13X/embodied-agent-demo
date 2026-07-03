@@ -2,6 +2,10 @@
 
 [English](README_EN.md)
 
+![演示节选:三视图指挥台绕行受阻边、POV 撞上箱堆、VLM 锁定异常、消融违规红闪](docs/recording/demo.gif)
+
+*16 秒节选;完整 4 分钟配音版见 [docs/recording/demo.mp4](docs/recording/demo.mp4)。*
+
 一个具身机器人 Agent 编排层仿真 demo。大模型只负责意图解析；导航、恢复、安全检查和评测都由确定性代码处理。
 
 这个仓库关注机器人式 agent 周围的控制层：任务规划、工具门禁、故障恢复、回放和可复现评测。当前版本没有实机验证，也没有接入真实 Nav2；运行后端是 mock navigation server。未来接入真实底盘所需的 `RobotAdapter` 边界见 [docs/ADAPTER_CONTRACT.md](docs/ADAPTER_CONTRACT.md)。

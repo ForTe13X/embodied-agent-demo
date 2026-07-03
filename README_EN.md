@@ -2,6 +2,10 @@
 
 [中文](README.md)
 
+![Demo excerpt: mission-control replay around a blocked edge, first-person view reaching the crate stack, the VLM locking onto the anomaly, and the gates-off ablation flashing ground-truth violations](docs/recording/demo.gif)
+
+*16-second excerpt; full 4-minute narrated video: [docs/recording/demo.mp4](docs/recording/demo.mp4).*
+
 A simulation demo for an embodied-agent orchestration layer. The language model is limited to intent parsing; navigation, recovery, safety checks, and evaluation are handled by deterministic code.
 
 This repository focuses on the control layer around a robot-like agent: task planning, tool gating, fault recovery, replay, and repeatable evaluation. It does not claim real-robot validation. The current backend is a mock navigation server, with a `RobotAdapter` boundary prepared for future Nav2/rclpy integration. See [docs/ADAPTER_CONTRACT.md](docs/ADAPTER_CONTRACT.md).
