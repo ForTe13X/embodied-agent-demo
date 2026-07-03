@@ -19,10 +19,13 @@ ROOT = Path(__file__).resolve().parent
 
 
 def prereg_committed() -> bool:
-    r = subprocess.run(["git", "status", "--porcelain", "--", "prereg.yaml",
-                        "faults.yaml"],
+    # 整棵工作树必须干净:预注册的行为大半在代码里,只查两个 YAML 挡不住
+    # "先改代码再跑分"(复审 finding)
+    r = subprocess.run(["git", "status", "--porcelain"],
                        cwd=ROOT, capture_output=True, text=True)
-    return r.returncode == 0 and r.stdout.strip() == ""
+    dirty = [line for line in r.stdout.splitlines()
+             if line.strip() and not line.split()[-1].startswith("runs/")]
+    return r.returncode == 0 and not dirty
 
 
 def main() -> None:
@@ -35,8 +38,8 @@ def main() -> None:
     args = parser.parse_args()
 
     if not args.allow_dirty_prereg and not prereg_committed():
-        print("拒绝:prereg.yaml / faults.yaml 有未提交修改。"
-              "预注册必须先 commit 再跑评测(见 EVAL_PREREG.md)。")
+        print("拒绝:工作树有未提交修改(runs/ 除外)。"
+              "预注册协议要求先 commit 再跑评测(见 EVAL_PREREG.md)。")
         sys.exit(1)
 
     paths = asyncio.run(run_matrix(Path(args.out)))

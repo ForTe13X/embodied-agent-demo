@@ -26,6 +26,12 @@ class Intent(BaseModel):
         # 单调收紧:LLM/规则解析给的红线低于静态配置时,以静态配置为准
         if self.battery_floor_pct < BATTERY_FLOOR_PCT:
             object.__setattr__(self, "battery_floor_pct", BATTERY_FLOOR_PCT)
+        # 复归阈值必须高于红线,否则回坞/续跑无限乒乓(复审 finding)
+        floor = min(self.battery_floor_pct, 90.0)
+        object.__setattr__(self, "battery_floor_pct", floor)
+        if self.resume_battery_pct < floor + 5:
+            object.__setattr__(self, "resume_battery_pct",
+                               min(100.0, floor + 5))
 
 
 DEFAULT_MISSION = "去 A 区巡检(a1→a2→a3),发现异常物体拍照上报;电量低于 20% 先回充。"

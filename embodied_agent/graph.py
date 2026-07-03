@@ -16,7 +16,7 @@ from typing import Optional, TypedDict
 from langgraph.graph import END, START, StateGraph
 
 from .planner_rules import build_queue, enumerate_substitutes
-from .recovery import PRIORITY, FaultClass, next_stage
+from .recovery import PRIORITY, RECOVERY_CHAINS, FaultClass, next_stage
 from .runtime import (
     MAX_GOAL_TICKS,
     MAX_WAIT_CHARGE_TICKS,
@@ -96,9 +96,15 @@ def build_graph(rt: Runtime):
                 args["approval_token"] = step["approval_token"]
             res = await reg.call("navigate_to", args, caller="executor")
             if not res.ok:
+                # 按错误码分类(复审 critical:电量闸拒绝曾被误分类为 TOOL_FAILURE,
+                # 恢复链在 navigate 步骤上不推进 → 零 tick 死循环)
+                code = res.error["code"]
+                if code == "BATTERY_FLOOR":
+                    return {"fault": _fault(FaultClass.LOW_BATTERY,
+                                            source="gate", code=code),
+                            "route": "except"}
                 return {"fault": _fault(FaultClass.TOOL_FAILURE,
-                                        tool="navigate_to",
-                                        code=res.error["code"]),
+                                        tool="navigate_to", code=code),
                         "route": "except"}
             return {"active_goal": res.data["goal_id"],
                     "goal_target": step["target"],
@@ -168,6 +174,11 @@ def build_graph(rt: Runtime):
                 waited += 1
                 st = await reg.call("get_robot_state", {}, caller="observer",
                                     poll=True)
+                if st.ok and not st.data["docked"]:
+                    # 防御:wait_charged 只允许在坞内执行(复审 finding)
+                    return {"waiting_charge": False,
+                            "outcome_hint": "charge_interrupted",
+                            "route": "report"}
                 if st.ok and st.data["battery_pct"] >= intent.resume_battery_pct:
                     log.emit("observer", "step_completed",
                              step={"kind": "wait_charged"},
@@ -201,15 +212,8 @@ def build_graph(rt: Runtime):
             poll_failures = 0
             fb, st = fb_res.data, st_res.data
 
-            # 安全水位:低电量在飞抢占(评审 B1/M4)
-            if (st["battery_pct"] < intent.battery_floor_pct
-                    and target != DOCK and not state.get("battery_handled")):
-                log.emit("observer", "watchdog_triggered", kind="battery",
-                         battery_pct=st["battery_pct"])
-                return {"fault": _fault(FaultClass.LOW_BATTERY,
-                                        battery_pct=st["battery_pct"]),
-                        "route": "except"}
-
+            # 终态判定先于电量水位:已经物理到达的目标要先记账,
+            # 否则恢复后整段路白走(复审 finding:同一轮询里电量抢占吞掉成功)
             if fb["status"] == "succeeded":
                 log.emit("observer", "step_completed",
                          step={"kind": "navigate", "target": target})
@@ -229,6 +233,15 @@ def build_graph(rt: Runtime):
                 return {"active_goal": None, "outcome_hint": "goal_canceled",
                         "route": "report"}
 
+            # 安全水位:低电量在飞抢占(评审 B1/M4)
+            if (st["battery_pct"] < intent.battery_floor_pct
+                    and target != DOCK and not state.get("battery_handled")):
+                log.emit("observer", "watchdog_triggered", kind="battery",
+                         battery_pct=st["battery_pct"])
+                return {"fault": _fault(FaultClass.LOW_BATTERY,
+                                        battery_pct=st["battery_pct"]),
+                        "route": "except"}
+
             # 受阻水位:feedback 停滞(server 不自报 blocked,这里检测才算数)
             if fb["stall_ticks"] >= STAGNATION_THRESHOLD_TICKS:
                 log.emit("observer", "watchdog_triggered", kind="stagnation",
@@ -245,12 +258,24 @@ def build_graph(rt: Runtime):
 
     # ---- exception manager(确定性分类 + 查表,评审 M3) -------------------
 
+    def _attempt_key(fclass: FaultClass, context: dict) -> str:
+        """按故障实例计数(复审 finding:按类别累计会让第二个不可达点
+        直接跳到链尾,得不到替代点机会)。实例判别:节点/边/工具;
+        传感器与低电量保持类级(全局状态,升级语义正确)。"""
+        instance = ""
+        if fclass in (FaultClass.NAV_BLOCKED, FaultClass.NAV_UNREACHABLE):
+            instance = str(context.get("node") or context.get("edge") or "")
+        elif fclass is FaultClass.TOOL_FAILURE:
+            instance = str(context.get("tool") or "")
+        return f"{fclass.value}:{instance}"
+
     async def exception_manager(state: AgentState) -> AgentState:
         fault = state["fault"]
         fclass = FaultClass(fault["fclass"])
         attempts = dict(state.get("attempts", {}))
-        n = attempts.get(fclass.value, 0)
-        attempts[fclass.value] = n + 1
+        key = _attempt_key(fclass, fault["context"])
+        n = attempts.get(key, 0)
+        attempts[key] = n + 1
         stage = next_stage(fclass, n)
         log.emit("exception_manager", "fault_classified",
                  fclass=fclass.value, context=fault["context"],
@@ -258,12 +283,39 @@ def build_graph(rt: Runtime):
 
         updates: AgentState = {"attempts": attempts, "fault": None}
 
-        # 需要停下底盘的阶段先取消在飞目标
+        # 兜底:同一实例恢复次数超过链长+2 → 不再原地打转,安全中止
+        # (复审 critical 的防御纵深:任何未来的不推进恢复动作都终止于 reporter)
+        if n > len(RECOVERY_CHAINS[fclass]) + 2:
+            log.emit("exception_manager", "recovery_exhausted", key=key)
+            if state.get("outcome_hint") == "hitl_abort":
+                updates["outcome_hint"] = "recovery_exhausted"
+                updates["route"] = "report"
+                return updates
+            updates["pending_action"] = {"type": "abort_to_dock",
+                                         "reason": "recovery_exhausted"}
+            updates["route"] = "replan"
+            return updates
+
+        # 无条件取消在飞目标:跳步/降级时底盘继续开向已放弃的目标会引发
+        # 连环 NAV_BUSY 误报(复审 finding);取消失败(已终态)记日志
         gid = state.get("active_goal")
-        if gid is not None and stage != "skip_step_degraded":
-            await reg.call("cancel_navigation", {"goal_id": gid},
-                           caller="exception_manager")
+        if gid is not None:
+            cancel_res = await reg.call("cancel_navigation", {"goal_id": gid},
+                                        caller="exception_manager")
+            if not (cancel_res.ok and cancel_res.data.get("canceled")):
+                log.emit("exception_manager", "cancel_noop", goal_id=gid)
             updates["active_goal"] = None
+
+        # 应急队列(回坞/充电/中止)的步骤受保护:不允许被跳过或替换目标,
+        # 否则 wait_charged 可能在远离 dock 处执行(复审 finding)
+        current_step = (state["queue"][state["queue_idx"]]
+                        if state["queue_idx"] < len(state["queue"]) else {})
+        if current_step.get("protected") and stage in (
+                "skip_step_degraded", "substitute_target", "escalate_hitl"):
+            updates["pending_action"] = {"type": "abort_to_dock",
+                                         "reason": "protected_step_recovery"}
+            updates["route"] = "replan"
+            return updates
 
         if stage == "escalate_hitl":
             target = state["queue"][state["queue_idx"]].get("target", "?")
@@ -287,6 +339,12 @@ def build_graph(rt: Runtime):
         elif stage == "substitute_target":
             step = state["queue"][state["queue_idx"]]
             target = step.get("target") or fault["context"].get("node")
+            if target == DOCK:
+                # dock 永不可被替代:回坞是安全兜底(复审 finding)
+                updates["pending_action"] = {"type": "abort_to_dock",
+                                             "reason": "dock_unreachable"}
+                updates["route"] = "replan"
+                return updates
             if fclass is FaultClass.NAV_UNREACHABLE:
                 rt.memory.unreachable_nodes.add(target)
             candidates = enumerate_substitutes(
@@ -307,7 +365,7 @@ def build_graph(rt: Runtime):
                                              "reason": "no_substitute_degraded_report"}
             else:
                 # 受阻链:无候选可替代 → 直接升级 HITL(占用一次 attempt)
-                attempts[fclass.value] = n + 2
+                attempts[key] = n + 2
                 res = await reg.call("ask_human_confirmation", {
                     "message": f"{target} 无可替代点,是否放弃该点、继续后续任务?",
                     "scope": f"skip:{target}"}, caller="exception_manager")
@@ -344,6 +402,21 @@ def build_graph(rt: Runtime):
 
     # ---- replanner(把恢复动作落到任务队列上) ------------------------------
 
+    def _skip_current_step(queue: list[dict], i: int, reason) -> int:
+        """跳过当前步;若为 navigate,连带跳过紧随其后、绑定同一目标节点的
+        perceive/report 步(复审 finding:配对感知步曾在错误节点执行并被记为完成)。
+        返回新的 queue_idx。"""
+        step = queue[i]
+        log.emit("replanner", "step_skipped", step=step, reason=reason)
+        new_i = i + 1
+        if step["kind"] == "navigate":
+            target = step.get("target")
+            while new_i < len(queue) and queue[new_i].get("at") == target:
+                log.emit("replanner", "step_skipped", step=queue[new_i],
+                         reason="paired_with_skipped_navigate")
+                new_i += 1
+        return new_i
+
     async def replanner(state: AgentState) -> AgentState:
         action = state["pending_action"]
         assert action is not None
@@ -370,31 +443,39 @@ def build_graph(rt: Runtime):
             updates["substitutions"] = state.get("substitutions", []) + [
                 {"old": action["old"], "new": action["new"]}]
         elif atype == "skip_step":
-            step = queue[i]
-            log.emit("replanner", "step_skipped", step=step,
-                     reason=action.get("reason"))
-            updates["queue_idx"] = i + 1
-            updates["degraded_steps"] = state.get("degraded_steps", []) + [step]
+            new_i = _skip_current_step(queue, i, action.get("reason"))
+            updates["queue_idx"] = new_i
+            updates["degraded_steps"] = (state.get("degraded_steps", [])
+                                         + queue[i:new_i])
         elif atype == "degrade_sensor":
             updates["sensor_degraded"] = True
-            step = queue[i]
-            if step["kind"] == "perceive":
-                updates["queue_idx"] = i + 1
+            step = queue[i] if i < len(queue) else None
+            if step is not None:
+                # 终链阶段必须推进:感知步跳过;非感知步(navigate 持续失败等)
+                # 也按跳步处理,否则同一步无限重发(复审 critical)
+                new_i = _skip_current_step(queue, i, "degrade_terminal")
+                updates["queue_idx"] = new_i
                 updates["degraded_steps"] = (state.get("degraded_steps", [])
-                                             + [step])
+                                             + queue[i:new_i])
         elif atype == "dock_resume":
-            # 快照剩余任务(含当前步),队列换成 回坞+等充电(评审 M4)
+            # 快照剩余任务(含当前步),队列换成 回坞+等充电(评审 M4);
+            # 应急步骤受保护,不允许后续恢复跳过/替换(复审 finding)
             snapshot = [dict(s) for s in queue[i:]]
             updates["resume_queue"] = snapshot
-            updates["queue"] = [{"kind": "navigate", "target": DOCK},
-                                {"kind": "wait_charged"}]
+            updates["queue"] = [
+                {"kind": "navigate", "target": DOCK, "protected": True},
+                {"kind": "wait_charged", "protected": True},
+            ]
             updates["queue_idx"] = 0
             log.emit("replanner", "queue_snapshot", snapshot=snapshot)
         elif atype == "abort_to_dock":
-            updates["queue"] = [{"kind": "navigate", "target": DOCK}]
+            updates["queue"] = [{"kind": "navigate", "target": DOCK,
+                                 "protected": True}]
             updates["queue_idx"] = 0
             updates["resume_queue"] = None
-            updates["outcome_hint"] = "hitl_abort"
+            updates["outcome_hint"] = ("hitl_abort"
+                                       if "hitl" in str(action.get("reason"))
+                                       else "safe_abort")
             log.emit("replanner", "mission_aborted", reason=action.get("reason"))
         else:
             raise ValueError(f"unknown recovery action: {atype}")

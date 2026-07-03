@@ -17,7 +17,9 @@ class FaultClass(str, Enum):
     TOOL_FAILURE = "tool_failure"
 
 
-# 数值越小优先级越高(观测同时命中多类时取最高优先级)
+# 数值越小优先级越高。裁决的实际执行者是 observer 的检查顺序
+# (graph.py:终态 → 电量 → 停滞,电量先于停滞即安全类抢占);
+# 本表是该顺序的声明式记录,进事件日志供审计,不是运行时查表。
 PRIORITY: dict[FaultClass, int] = {
     FaultClass.LOW_BATTERY: 0,
     FaultClass.NAV_BLOCKED: 1,

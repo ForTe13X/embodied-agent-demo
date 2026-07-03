@@ -2,4 +2,4 @@
 __pycache__/
 *.pyc
 .pytest_cache/
-runs/
+# runs/ 故意入库:RESULTS.md 引用逐 run 日志作为审计证据(复审 finding)

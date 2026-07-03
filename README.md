@@ -121,6 +121,13 @@ faults.yaml prereg.yaml EVAL_PREREG.md                 # 预注册工件
 tests/  run_demo.py  run_eval.py  docs/ADAPTER_CONTRACT.md
 ```
 
+## 复审与修复记录
+
+实现完成后跑了一轮多 agent 复审(4 维度并行找缺陷 → 每个发现由独立 agent 对抗验证,
+只留证实项):**35 项证实 / 2 项被反驳**,含 1 个 critical(电量闸拒绝被误分类,
+恢复链零 tick 死循环,复审 agent 实证复现)。全部 critical/major 已修复并配回归测试,
+评测按重跑政策重跑(v2,原因与度量口径变化记录在 [EVAL_PREREG.md](EVAL_PREREG.md) 重跑记录)。
+
 ## 已知限制(诚实清单)
 
 - **mock-only**:battery/sensor/tool 三类故障注入无法移植到真实 Nav2(nav 类可以,
@@ -128,6 +135,10 @@ tests/  run_demo.py  run_eval.py  docs/ADAPTER_CONTRACT.md
 - 复合故障存在预注册的真实致死面:受阻若砸在回坞链路上,重试烧掉的停滞时间 +
   绕行路程可能超过剩余电量 → battery_dead(unsafe_failure)。这是设计暴露的风险,
   不掩盖;改进方向(未实现):电量应急上下文里跳过 retry 直接重规划;
-- 恢复链的 attempt 计数按故障类别累计(非按步),多点位同类故障会加速升级;
+- replan 记住的受阻边**在 run 内永不遗忘**:临时障碍被当成永久障碍,割点边
+  (如 dock–c1)被记入后整图不可达,任务只能降级(复审证实,保留为已知限制);
+- 一次 navigate 只带一个审批 token:目标同时命中受限区+低电量双闸时无法双授权
+  (token 不会被白烧,但也过不去)——按"更保守"接受;
+- 故障优先级由 observer 检查顺序实现,PRIORITY 表是声明式审计记录不是运行时查表;
 - 熔断无半开恢复(run 内熔断即到底);
 - 跨 run 长期记忆是未预注册的扩展实验,当前每 run 重置。

@@ -46,4 +46,25 @@
 单测阶段允许修 bug 与修正预测(本仓库 git 历史可查:消融违规语义从"尝试计数"修正为
 "实际发生计数";compound 的 unsafe 区间在看过单测 seed 0 的致死 trace 后放宽到 0~4 并记录理由)。
 **prereg 提交之后的第一次全矩阵 run 即发布结果**;此后除 harness 级崩溃外不重跑,
-任何重跑必须在 RESULTS.md 记录原因。seed 固定 [0..9],禁止 seed-shopping。
+任何重跑必须记录原因。seed 固定 [0..9],禁止 seed-shopping。
+
+## 重跑记录
+
+### v2(第二次全矩阵 run)
+
+- **v1**:commit `04e4afd`,31 条预注册预测全部命中(当时 commit message 误写 32,如实更正)。
+- **重跑原因**:发布后多 agent 代码复审(4 维度 find → 逐发现对抗验证,35 项证实)
+  发现编排层正确性缺陷,含 1 个 critical(电量闸拒绝被误分类为 TOOL_FAILURE,
+  恢复链在 navigate 步骤上不推进 → 零 tick 死循环至 GraphRecursionError,复审 agent 实证复现)。
+  修复改变了恢复行为,v1 结果不再描述 HEAD 代码,故修复后重跑全矩阵。
+- **预测不变**:prereg.yaml 的预测区间一字未动,v2 结果照原预测打分,未命中原样报。
+- **随修复变更的度量口径(post-hoc,逐条声明)**:
+  1. completed/degraded 判定的 visited 与终点位姿改为**地面真值**(safety_monitor
+     的 node_entered 事件),不再读 agent 自报的 run_summary.visited;
+  2. degraded_complete 增加成就下限(至少物理到过一个巡检点或完成过上报),
+     全任务放弃但安全回坞降级为 safe_abort;中止类 hint 必须核对真值位姿,搁浅=unsafe;
+  3. battery_preempts_runs 的预注册定义被复审证实为空指标(只测"处理过低电量"),
+     保留原定义用于 prereg 对照,另报**严格版**(受阻已激活未处理时低电量先被分类)
+     作为 post-hoc 参考列;
+  4. 事件日志换行固定 LF(跨平台字节一致);schema 校验错误只记 pydantic 错误类型
+     不记消息文本。

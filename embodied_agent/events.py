@@ -1,7 +1,7 @@
 """append-only 事件日志(评审 minor:关联 ID + 可回放 schema)。
 
 每条事件:{seq, tick, run_id, condition, seed, actor, event_type, payload}。
-不写墙钟时间(除 run_meta 一条),保证同 seed 事件流逐字节可复现;
+不写墙钟时间,保证同 seed 事件流逐字节可复现(含跨平台:换行固定 LF);
 指标由独立脚本只读日志计算,不读 agent 内存。
 """
 from __future__ import annotations
@@ -32,7 +32,8 @@ class EventLog:
         self.on_emit = None  # demo 叙述钩子:callable(event) -> None,不影响日志内容
         if path is not None:
             path.parent.mkdir(parents=True, exist_ok=True)
-            self._fh = open(path, "w", encoding="utf-8")  # GBK 陷阱:必须显式 utf-8(评审 M10)
+            # GBK 陷阱:显式 utf-8(评审 M10);newline 固定 LF,跨平台字节一致
+            self._fh = open(path, "w", encoding="utf-8", newline="\n")
 
     def emit(self, actor: str, event_type: str, **payload) -> dict:
         self._seq += 1

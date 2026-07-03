@@ -20,7 +20,8 @@ DECISION_EVENTS = {
     "recovery_applied", "queue_snapshot", "queue_resumed",
     "hitl_request", "hitl_decision", "guardrail_rejection", "circuit_open",
     "token_consumed", "finding_reported", "step_skipped", "violation",
-    "run_summary", "run_crashed",
+    "run_summary", "run_crashed", "attempt", "recovery_exhausted",
+    "cancel_noop",
 }
 
 

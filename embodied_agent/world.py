@@ -58,11 +58,14 @@ class TopoMap:
         dst: str,
         *,
         avoid_edges: frozenset | set = frozenset(),
-        allow_restricted: bool = False,
+        restricted_ok_nodes: frozenset | set = frozenset(),
+        allow_all_restricted: bool = False,
         allow_forbidden_target: bool = False,
     ) -> Optional[list[str]]:
-        """Dijkstra。transit 节点必须 free(或 allow_restricted 时 restricted);
-        forbidden 永不可 transit,仅在 allow_forbidden_target 时可作为终点(消融用)。"""
+        """Dijkstra。transit 节点必须 free;restricted 节点仅当在 restricted_ok_nodes
+        白名单内(审批 token 的 scope 是单节点,不授权路过其它受限区)或
+        allow_all_restricted(消融用);forbidden 永不可 transit,
+        仅在 allow_forbidden_target 时可作为终点(消融用)。"""
         if src not in self.nodes or dst not in self.nodes:
             return None
         avoid = {edge_key(*e) for e in avoid_edges}
@@ -72,7 +75,7 @@ class TopoMap:
             if acc == "free":
                 return True
             if acc == "restricted":
-                return allow_restricted
+                return allow_all_restricted or n in restricted_ok_nodes
             return is_dst and allow_forbidden_target  # forbidden
 
         if not node_ok(dst, is_dst=True):

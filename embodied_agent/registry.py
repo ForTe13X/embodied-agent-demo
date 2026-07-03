@@ -144,8 +144,11 @@ class ToolRegistry:
         try:
             parsed = spec.input_model(**args)
         except ValidationError as e:
+            # 只记录 pydantic 错误类型,不记录消息文本(消息随版本变化会破坏确定性回放)
+            first = e.errors()[0]
             return self._reject(call_id, name, "SCHEMA_VIOLATION",
-                                f"输入校验失败: {e.errors()[0].get('msg', '')}")
+                                f"输入校验失败: {first.get('type', '')} @ "
+                                f"{'.'.join(str(x) for x in first.get('loc', ()))}")
 
         # 安全门禁
         self._nav_zone_auth = False
@@ -190,36 +193,48 @@ class ToolRegistry:
     # ---- 门禁 --------------------------------------------------------------
 
     def _navigate_gate(self, parsed: NavigateToIn) -> Optional[tuple[str, str]]:
+        """两阶段:先校验全部门禁,全部通过才核销 token——
+        部分通过不烧 token(复审 finding:双闸场景 token 被白白消耗)。"""
         node_id = parsed.node_id
         if not self.topo.has(node_id):
             return ("NOT_IN_MAP", f"节点 {node_id!r} 不在拓扑图内")
         access = self.topo.access(node_id)
         if access == "forbidden":
             return ("FORBIDDEN", f"节点 {node_id!r} 为禁入区,审批也不放行")
+        needed_scopes: list[str] = []
+        zone_auth = battery_auth = False
         if access == "restricted":
-            err = self._consume_token(parsed.approval_token, f"navigate_to:{node_id}")
+            err = self._check_token(parsed.approval_token, f"navigate_to:{node_id}")
             if err:
                 return err
-            self._nav_zone_auth = True
+            needed_scopes.append(f"navigate_to:{node_id}")
+            zone_auth = True
         state_battery = self._last_known_battery()
         if state_battery is not None and state_battery < BATTERY_FLOOR_PCT and node_id != DOCK:
-            err = self._consume_token(parsed.approval_token, f"battery_override:{node_id}")
+            err = self._check_token(parsed.approval_token, f"battery_override:{node_id}")
             if err:
                 return ("BATTERY_FLOOR",
                         f"电量 {state_battery}% 低于红线 {BATTERY_FLOOR_PCT}%,仅允许返回 dock 或经 HITL 审批")
-            self._nav_battery_auth = True
+            needed_scopes.append(f"battery_override:{node_id}")
+            battery_auth = True
+        for scope in needed_scopes:
+            self._consume_token(parsed.approval_token, scope)
+        self._nav_zone_auth = zone_auth
+        self._nav_battery_auth = battery_auth
         return None
 
-    def _consume_token(self, token: Optional[str], scope: str) -> Optional[tuple[str, str]]:
+    def _check_token(self, token: Optional[str], scope: str) -> Optional[tuple[str, str]]:
         if token is None:
             return ("APPROVAL_REQUIRED", f"动作 {scope} 需要 HITL 审批 token")
         info = self._tokens.get(token)
         if info is None or info["used"] or info["scope"] != scope \
                 or self.clock.tick > info["expires_tick"]:
             return ("INVALID_TOKEN", f"token 无效/过期/scope 不符: {scope}")
-        info["used"] = True
-        self.log.emit("registry", "token_consumed", token=token, scope=scope)
         return None
+
+    def _consume_token(self, token: str, scope: str) -> None:
+        self._tokens[token]["used"] = True
+        self.log.emit("registry", "token_consumed", token=token, scope=scope)
 
     def _last_known_battery(self) -> Optional[float]:
         # 门禁用地面真值电量(经 adapter 读取,等价于底盘 BMS 上报,不经 LLM)
@@ -232,12 +247,15 @@ class ToolRegistry:
         a = self.adapter
 
         async def navigate_to(p: NavigateToIn) -> dict:
-            # 门禁核销过的授权(token 一次一用)透传给底盘/地面真值监视器
+            # 门禁核销过的授权(token 一次一用)透传给底盘/地面真值监视器;
+            # zone token 的 scope 是单节点:只把目标节点加入受限白名单,不授权路过其它受限区
             authorized = self._nav_zone_auth or self._nav_battery_auth
             avoid = {edge_key(*e) for e in p.avoid_edges if len(e) == 2}
             res = await a.send_goal(
                 p.node_id, authorized=authorized, avoid_edges=avoid,
-                allow_restricted=self._nav_zone_auth or not self.gates_on,
+                restricted_ok_nodes=({p.node_id} if self._nav_zone_auth
+                                     else frozenset()),
+                allow_all_restricted=not self.gates_on,
                 allow_forbidden_target=not self.gates_on)
             if "error" in res:
                 raise ToolError("NAV_BUSY", res["error"])
@@ -313,7 +331,9 @@ class ToolRegistry:
     async def _execute(self, spec: ToolSpec, parsed: _In) -> dict:
         injected = self.injector.tool_intercept(spec.name)
         if injected == "timeout":
-            await self.clock.advance(TIMEOUT_PENALTY_TICKS)
+            # 超时消耗的是真实世界时间:经 adapter 推进(电量衰减/故障触发同步发生),
+            # 不是只拨快时钟(复审 finding:幽灵 tick)
+            await self.adapter.wait(TIMEOUT_PENALTY_TICKS)
             raise ToolError("TIMEOUT", f"{spec.name} 超时(注入)", retriable=True)
         data = await spec.handler(parsed)
         if injected == "malformed":

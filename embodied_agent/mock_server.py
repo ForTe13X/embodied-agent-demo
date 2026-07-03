@@ -74,7 +74,8 @@ class MockNavServer:
         *,
         authorized: bool = False,
         avoid_edges: set = frozenset(),
-        allow_restricted: bool = False,
+        restricted_ok_nodes: set = frozenset(),
+        allow_all_restricted: bool = False,
         allow_forbidden_target: bool = False,
     ) -> dict:
         if self._active is not None:
@@ -92,7 +93,8 @@ class MockNavServer:
             route = self.topo.route(
                 self.world.robot_node, target,
                 avoid_edges=avoid_edges,
-                allow_restricted=allow_restricted,
+                restricted_ok_nodes=restricted_ok_nodes,
+                allow_all_restricted=allow_all_restricted,
                 allow_forbidden_target=allow_forbidden_target,
             )
             if route is None:

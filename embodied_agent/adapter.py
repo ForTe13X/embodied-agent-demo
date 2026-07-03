@@ -22,7 +22,8 @@ class SensorUnhealthy(Exception):
 class RobotAdapter(Protocol):
     async def send_goal(self, target: str, *, authorized: bool = False,
                         avoid_edges: set = frozenset(),
-                        allow_restricted: bool = False,
+                        restricted_ok_nodes: set = frozenset(),
+                        allow_all_restricted: bool = False,
                         allow_forbidden_target: bool = False) -> dict: ...
     async def feedback(self, goal_id: str) -> Optional[dict]: ...
     async def result(self, goal_id: str) -> Optional[dict]: ...
@@ -52,11 +53,13 @@ class MockAdapter:
 
     async def send_goal(self, target: str, *, authorized: bool = False,
                         avoid_edges: set = frozenset(),
-                        allow_restricted: bool = False,
+                        restricted_ok_nodes: set = frozenset(),
+                        allow_all_restricted: bool = False,
                         allow_forbidden_target: bool = False) -> dict:
         return self.server.send_goal(
             target, authorized=authorized, avoid_edges=avoid_edges,
-            allow_restricted=allow_restricted,
+            restricted_ok_nodes=restricted_ok_nodes,
+            allow_all_restricted=allow_all_restricted,
             allow_forbidden_target=allow_forbidden_target)
 
     async def feedback(self, goal_id: str) -> Optional[dict]:
