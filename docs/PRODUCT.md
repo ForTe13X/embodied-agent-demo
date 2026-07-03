@@ -57,5 +57,6 @@ quadrantChart
 
 ## 6. 已知限制
 
-见 [README「已知限制(诚实清单)」](../README.md#已知限制诚实清单)——受阻边永不遗忘、
-单 token 双闸、复合故障致死面等,连同复审(35 项证实)与修复记录一并公开。
+见 [README「边界」](../README.md#边界)——受阻边在 run 内持续不可用、单 token 双闸、
+复合故障致死面等;复审(35 项证实)与修复记录见 [REVIEW.md](../REVIEW.md) 和
+[EVAL_PREREG.md 重跑记录](../EVAL_PREREG.md)。

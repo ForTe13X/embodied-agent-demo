@@ -1,6 +1,6 @@
 # 测试用例文档
 
-三层:34 个自动化用例(pytest)、6 条前后端联调断言(playwright,可重跑)、评测矩阵(90 run)。
+三层:34 个自动化用例(pytest)、10 条前后端联调断言(playwright,可重跑)、评测矩阵(90 run)。
 运行方式与 expected outputs 均可复现;自动化层 `pytest tests -q` **expected:`34 passed`**。
 
 ## 1. 自动化用例(tests/)
@@ -38,7 +38,7 @@
 | tool_failure | 检出 `tool_failure`,`degraded_complete` |
 | compound | 电量抢占为真;seed0 如实 `unsafe_failure/battery_dead`(确定性回归,不粉饰) |
 
-### 1.4 确定性与工具治理(test_determinism_and_tools.py,4 例)
+### 1.4 确定性与工具治理(test_determinism_and_tools.py,5 例)
 
 同 seed 事件流逐条一致 / 异 seed 不同 / 幂等重试恢复单次失败(仅 1 条 `tool_attempt_failed`)/
 连续 3 失败熔断(`circuit_open` 事件,后续调用 `CIRCUIT_OPEN`)/ 非幂等绝不自动重试。

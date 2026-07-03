@@ -100,7 +100,7 @@ Phase B 止损线见 [ADAPTER_CONTRACT.md](ADAPTER_CONTRACT.md)。
 
 | 端点 | 参数 | expected output |
 |---|---|---|
-| `GET /api/runs` | — | `[{"condition":"baseline","seed":0},…]`(90 项) |
+| `GET /api/runs` | — | `[{"condition":"ablation_gates_off","seed":0},…]`(按条件名排序,共 90 项) |
 | `GET /api/log` | `condition`(`^[a-z0-9_]+$`)、`seed`(数字) | 事件数组;参数不合法 `400 {"error":"bad params"}`;不存在 `404` |
 | `GET /pov/<name>.mp4` | 支持 HTTP `Range`(浏览器视频 seek 依赖) | `206 Partial Content` + `Content-Range`;越界 `416` |
 | `GET /` | — | viewer 静态页 |

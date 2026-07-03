@@ -21,7 +21,7 @@ $env:PYTHONUTF8 = 1        # 中文 Windows 必设(GBK 控制台防线)
 | `python run_demo.py --scenario blocked` | 受阻→水位检测→绕行 | 见下图:`stagnation` → `retry` → `avoid_edge` → 绕 B 区成功 |
 | `python run_demo.py --scenario battery` | 低电量→回坞→断点续跑 | `队列快照(5 步)→ 回坞充电` → `断点续跑:恢复 5 步` |
 | `python run_demo.py --scenario restricted --interactive` | 受限区 HITL 审批 | 控制台出现 `批准吗?(y/N):`,输入 y → `已进入 r1(…违规数=0)` |
-| `python run_demo.py --nl "去A区巡检a1和a3" --llm` | LM Studio 意图解析 | `意图解析(provider=lmstudio):{'patrol_nodes': ['a1','a3'], …}` |
+| `python run_demo.py --nl "去A区巡检a1和a3" --llm` | LM Studio 意图解析 | `意图解析(provider=lmstudio):{'mission': …, 'patrol_nodes': ['a1', 'a3'], …}` |
 
 受阻场景完整输出(截图,含每一步恢复决策):
 
@@ -84,8 +84,9 @@ python viewer\serve.py          # expected: replay viewer: http://127.0.0.1:8777
 
 ![事件流](screenshots/viewer_feed.png)
 
-只显示决策级事件(≤当前 tick),按 actor 配色:红=故障注入/安全监视,黄=异常管理,
-紫=重规划,青=HITL,绿=报告。数据即 `runs/**.jsonl` 原文,无二次加工。
+只显示决策级事件(≤当前 tick),按 actor 配色:红=安全监视,黄=故障注入/异常管理
+(故障注入行另带红色左边框),紫=重规划,青=HITL,绿=报告。数据即 `runs/**.jsonl`
+原文,无二次加工。
 
 ### 4.4 三视图指挥台布局(POV + 拓扑 + 事件流,单屏同轴)
 

@@ -78,10 +78,10 @@ The mock navigation server does not return a synthetic `blocked` status. When mo
 | Unreachable point | Isolated target | `result=unreachable` | Alternative point from a closed candidate set -> degraded report |
 | Sensor fault | `sensor_health=false` | Perception error | Skip/degrade -> pause + HITL |
 | Low battery | Low initial charge with faster drain | Battery watermark on every tick | Snapshot queue -> dock and charge -> continue queued work |
-| Tool failure | Timeout or malformed response before perception | Validation failure or timeout | Retry idempotent calls -> circuit break -> degraded failure report |
+| Tool failure | First k perceive calls return a timeout or malformed response (k = 2 or 4 per seed) | Validation failure or timeout | Skip step (degraded) -> failure report + degrade; the registry retries idempotent calls once and circuit-breaks on persistent failure |
 | Combined blocked route + low battery | Simultaneous faults | Same signals as above | Safety recovery preempts task recovery |
 
-Recovery is deterministic: classify the fault, look up the chain, and choose only from enumerated candidates. In optional LLM mode, the model may choose an index from that closed set; it does not invent recovery actions.
+Recovery is deterministic: classify the fault, look up the chain, and choose only from enumerated candidates. The selector interface only permits picking an index from that closed set — even a future LLM-backed selector could not invent recovery actions. The current implementation always uses the deterministic rule selector.
 
 ## Tool Registry Rules
 
