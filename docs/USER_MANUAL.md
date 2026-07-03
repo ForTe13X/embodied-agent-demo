@@ -87,7 +87,14 @@ python viewer\serve.py          # expected: replay viewer: http://127.0.0.1:8777
 只显示决策级事件(≤当前 tick),按 actor 配色:红=故障注入/安全监视,黄=异常管理,
 紫=重规划,青=HITL,绿=报告。数据即 `runs/**.jsonl` 原文,无二次加工。
 
-## 4.4 POV 第一人称视频(可选,视觉演示)
+## 4.4 POV 同步面板(viewer 内)
+
+有预渲染 POV 视频的 run(`viewer/pov/<condition>_seed<N>.mp4`,现有 nav_blocked/
+low_battery/ablation_gates_off 各 seed0),加载后 canvas 右侧自动出现第一人称画面,
+**随 tick 滑杆逐帧同步**(见 [viewer_pov.png](screenshots/viewer_pov.png));
+无视频的 run 面板自动隐藏。消融 run 的 POV 在每次地面真值违规时全屏红闪。
+
+## 4.5 POV 第一人称视频(可选,视觉演示)
 
 任意 run 可渲染成机器人第一人称视角(Godot 4 headless,依赖 gamecraft-runner 容器),
 详见 [povgen/README.md](../povgen/README.md)。**expected output:**`POVGEN_DONE 335` +

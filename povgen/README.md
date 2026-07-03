@@ -30,6 +30,27 @@ ffmpeg -framerate 30 -i frames\f_%05d.png -c:v libx264 -pix_fmt yuv420p clip_pov
 
 本仓库的 povgen/ 是源码存档;运行时需拷到 runner 挂载的 games 目录(见 shots.sh 内路径)。
 
+## 真 VLM 实跑(qwen3-vl-4b @ LM Studio)
+
+`scripts/vlm_annotate.py` 把 `--nohud --vantage` 渲染的干净巡检帧喂给本地视觉模型,
+拿**真实结构化观测**(非 mock):
+
+![VLM 实跑标注](../docs/screenshots/vlm_live_annotated.png)
+
+实测结果与诚实记录:
+- 检出走道散落物 `small_blue_cube conf=0.95`、`small_orange_cube conf=0.92`,均判违规占道;
+- **倾倒的大纸箱未被单独识别**(被归入货架类)——4B 模型在风格化渲染上的真实局限,如实保留;
+- 提示词教训:预先把货架/标记声明"合规"并给出"畅通输出空"的台阶,会把小模型推向空答案;
+  改为"先列地面实体物品、再判占道"后才稳定检出(诊断过程:开放式提问确认模型能看见
+  全部物体,证明是提示格式问题而非感知问题);
+- 评测环路仍然 0 次 LLM/VLM 调用,本管线属 live-demo 层。
+
+## 违规红闪(消融条件 POV)
+
+`export_traj.py` 导出地面真值 violations,POV 里每次越界全屏红色脉冲 + 事件字幕:
+
+![违规红闪](../docs/screenshots/pov_violation_flash.png)
+
 ## 镜头语言(Main.gd)
 
 - 停滞时保持"来向"朝向 → 正对障碍;感知窗口 yaw 单独转向异常物体(位置仍走真值);

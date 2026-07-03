@@ -26,6 +26,8 @@ var vlm_rect: Panel
 var vlm_label: Label
 var vlm_head: Label
 var scanline: ColorRect
+var vignette: ColorRect
+var hud_layer: CanvasLayer
 
 
 func _ready() -> void:
@@ -48,8 +50,14 @@ func _ready() -> void:
 
 	_build_world()
 	_build_hud()
+	if args.has("nohud"):  # VLM 实跑要吃干净帧(不带叠加,含 3D 标签)
+		hud_layer.visible = false
+		for n in find_children("*", "Label3D", true, false):
+			n.visible = false
 
-	if args.has("shot"):
+	if args.has("vantage"):
+		await _run_vantage_shot(String(args["vantage"]))
+	elif args.has("shot"):
 		await _run_shot(float(args.get("tick", "14")), String(args["shot"]))
 	elif args.has("out"):
 		await _run_povgen(String(args["out"]), int(args.get("fpt", "5")))
@@ -80,6 +88,22 @@ func _run_povgen(outdir: String, fpt: int) -> void:
 		if fr % 50 == 0:
 			print("FRAME ", fr, "/", total)
 	print("POVGEN_DONE ", total)
+	get_tree().quit()
+
+
+func _run_vantage_shot(path: String) -> void:
+	# 定点巡检机位:沿 a1<-a2 开阔走道退后 2.8m,正对异常物(perceive 的标准姿态)
+	var a2p := _node_pos("a2")
+	var a1p := _node_pos("a1")
+	var back := (a1p - a2p).normalized() * 2.8
+	var ab := anomaly_box.global_position
+	var cp := Vector2(ab.x, ab.z) + back
+	cam.position = Vector3(cp.x, CAM_H, cp.y)
+	cam.look_at(Vector3(ab.x, 0.3, ab.z))
+	for k in range(8):
+		await get_tree().process_frame
+	get_viewport().get_texture().get_image().save_png(path)
+	print("SHOT_OK ", path)
 	get_tree().quit()
 
 
@@ -165,6 +189,15 @@ func _apply(t: float) -> void:
 	hud_caption.modulate = Color(1.0, 0.45, 0.45) if (
 		cap.begins_with("!!") or cap.begins_with("WATCHDOG")) else Color(0.5, 1.0, 0.9)
 	hud_rec.visible = int(t * 2.0) % 2 == 0
+
+	# 地面真值违规:全屏红色脉冲(消融条件的第一人称越界)
+	var va := 0.0
+	for v in traj.get("violations", []):
+		var vt := float(v["tick"])
+		if t >= vt and t - vt < 2.5:
+			va = max(va, 1.0 - (t - vt) / 2.5)
+	vignette.color = Color(0.85, 0.1, 0.12, 0.30 * va)
+	vignette.visible = va > 0.01
 
 	_apply_vlm(t)
 
@@ -345,12 +378,19 @@ func _build_world() -> void:
 	_box(Vector3(1.8, 2.6, 0.15), Vector3(fp.x, 1.3, fp.y - 0.7),
 		_mat(Color(0.75, 0.2, 0.22), true, 0.4))
 
-	# 异常物体(perceive 的目标):a2 旁的无主纸箱
+	# 异常物体(perceive 的目标):走道中央倾倒的纸箱 + 散落物(视觉上无歧义)
 	var ap := _node_pos(String(traj["anomaly_node"]))
-	anomaly_box = _box(Vector3(0.55, 0.5, 0.55), Vector3(ap.x + 0.9, 0.25, ap.y + 0.6),
-		_mat(Color(0.72, 0.54, 0.3)))
-	_box(Vector3(0.4, 0.32, 0.4), Vector3(ap.x + 1.25, 0.16, ap.y + 0.15),
-		_mat(Color(0.6, 0.44, 0.24)))
+	anomaly_box = _box(Vector3(0.62, 0.52, 0.62), Vector3(ap.x + 0.9, 0.24, ap.y + 0.6),
+		_mat(Color(0.85, 0.68, 0.42)))
+	anomaly_box.rotation = Vector3(0.12, 0.5, 0.62)  # 倾倒
+	_box(Vector3(0.66, 0.1, 0.14), Vector3(ap.x + 0.9, 0.3, ap.y + 0.6),
+		_mat(Color(0.95, 0.45, 0.1)))  # 橙色打包带
+	var spill := _mat(Color(0.2, 0.55, 0.95))
+	var spill2 := _mat(Color(0.95, 0.5, 0.12))
+	_box(Vector3(0.16, 0.16, 0.16), Vector3(ap.x + 0.45, 0.08, ap.y + 0.95), spill)
+	_box(Vector3(0.14, 0.14, 0.14), Vector3(ap.x + 1.3, 0.07, ap.y + 0.9), spill2)
+	_box(Vector3(0.12, 0.12, 0.12), Vector3(ap.x + 0.7, 0.06, ap.y + 1.25), spill)
+	_box(Vector3(0.15, 0.15, 0.15), Vector3(ap.x + 1.1, 0.08, ap.y + 0.35), spill2)
 
 	# 受阻障碍:箱堆(fault tick 前隐藏)
 	obstacle = Node3D.new()
@@ -381,6 +421,12 @@ func _build_world() -> void:
 func _build_hud() -> void:
 	var cl := CanvasLayer.new()
 	add_child(cl)
+	hud_layer = cl
+
+	vignette = ColorRect.new()
+	vignette.size = Vector2(1280, 720)
+	vignette.visible = false
+	cl.add_child(vignette)
 
 	hud_tick = Label.new()
 	hud_tick.position = Vector2(18, 12)

@@ -82,6 +82,10 @@ def main() -> None:
                                   "label": o["label"], "conf": o["confidence"]})
     battery = [{"tick": e["tick"], "pct": e["payload"]["battery_pct"]}
                for e in ev if e["payload"].get("battery_pct") is not None]
+    violations = [{"tick": e["tick"],
+                   "node": e["payload"].get("node") or e["payload"].get("target"),
+                   "kind": e["payload"]["kind"]}
+                  for e in ev if e["event_type"] == "violation"]
 
     captions = []
     CAP = {
@@ -92,6 +96,8 @@ def main() -> None:
         "finding_reported": lambda p: f"REPORT: {p['label']} @ {p['node_id'].upper()}",
         "queue_snapshot": lambda p: "SNAPSHOT QUEUE -> DOCK & RECHARGE",
         "queue_resumed": lambda p: "RESUME ORIGINAL QUEUE",
+        "violation": lambda p: f"!! GROUND-TRUTH VIOLATION: {p['kind'].upper()}",
+        "guardrail_rejection": lambda p: f"GATE INTERCEPT: {p['code']}",
     }
     for e in ev:
         fn = CAP.get(e["event_type"])
@@ -115,6 +121,7 @@ def main() -> None:
                     for ft, edge in blocked],
         "anomaly_node": "a2",
         "perceives": perceives, "battery": battery, "captions": captions,
+        "violations": violations,
     }
     dst.parent.mkdir(parents=True, exist_ok=True)
     dst.write_text(json.dumps(out, ensure_ascii=False, indent=1), encoding="utf-8")

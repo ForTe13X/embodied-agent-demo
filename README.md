@@ -13,6 +13,8 @@
 |---|---|
 | 演示录屏(3.9min,中英字幕打轴,edge-tts 女声,含 POV 场景) | [docs/recording/demo.mp4](docs/recording/demo.mp4)(+ [.srt](docs/recording/demo.srt)) |
 | POV 第一人称渲染管线(Godot 4,真值轨迹驱动,VLM 观测叠加) | [povgen/](povgen/) + [scripts/export_traj.py](scripts/export_traj.py) |
+| 真 VLM 实跑(qwen3-vl-4b 本地推理巡检帧,含诚实局限记录) | [scripts/vlm_annotate.py](scripts/vlm_annotate.py) → [标注帧](docs/screenshots/vlm_live_annotated.png) |
+| viewer POV 同步面板 + 三条 POV 视频(含消融违规红闪) | [viewer/pov/](viewer/pov/) |
 | API 参考(工具/错误码/时序图/expected outputs) | [docs/API.md](docs/API.md) |
 | 用户手册(逐控件截图 + expected outputs) | [docs/USER_MANUAL.md](docs/USER_MANUAL.md) |
 | 测试用例(34 自动化 + 6 联调断言 + 90 run 矩阵) | [docs/TESTCASES.md](docs/TESTCASES.md) |

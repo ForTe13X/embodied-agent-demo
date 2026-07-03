@@ -119,6 +119,25 @@ def main() -> None:
             bat = page.text_content("#battery-label")
             passed.append(f"low_battery seed0 t=12 电量条 ✓ (显示 {bat})")
 
+            # ---- POV 同步面板:有渲染视频的 run 显示并随 tick 同步 ----
+            load_run(page, "nav_blocked", 0)
+            page.wait_for_function(
+                "() => document.getElementById('pov-wrap').style.display === 'block'",
+                timeout=10_000)
+            seek(page, 30)
+            page.wait_for_timeout(400)
+            tsync = page.evaluate(
+                "() => document.getElementById('pov-video').currentTime")
+            assert abs(tsync - (30 + 1) * 5 / 30) < 0.2, f"POV 同步偏差 {tsync}"
+            passed.append(f"POV 面板显示且随 tick 同步 ✓ (t=30 → video {tsync:.2f}s)")
+            page.screenshot(path=str(SHOTS / "viewer_pov.png"))
+            # 无 POV 视频的 run 应隐藏面板
+            load_run(page, "nav_unreachable", 0)
+            page.wait_for_function(
+                "() => document.getElementById('pov-wrap').style.display === 'none'",
+                timeout=10_000)
+            passed.append("无 POV 视频的 run 面板自动隐藏 ✓")
+
             browser.close()
     finally:
         server.terminate()

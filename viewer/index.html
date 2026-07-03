@@ -71,6 +71,11 @@
     </div>
   </div>
   <div id="event-feed"><h2>决策事件流(≤ 当前 tick)</h2><div id="feed-body"></div></div>
+  <div id="pov-wrap" style="display:none">
+    <h2 style="font-size:13px;color:var(--dim);margin:0 0 6px">POV 第一人称(Godot 真值轨迹渲染,随 tick 同步)</h2>
+    <video id="pov-video" width="500" muted preload="auto"
+           style="border:1px solid var(--line);border-radius:6px;display:block"></video>
+  </div>
 </div>
 
 <script>
@@ -129,8 +134,21 @@ async function loadLog() {
     (summary.payload.outcome_hint || "completed") : "crashed";
   $("tick-slider").max = maxTick; $("tick-max").textContent = maxTick;
   cur = 0; playing = false; $("play-btn").textContent = "▶ 播放";
+  // POV 同步面板:存在对应渲染视频则显示(fpt=5 → t_video=(tick+1)/6)
+  const pov = $("pov-video"), povWrap = $("pov-wrap");
+  const [c, s] = $("run-select").value.split(":");
+  pov.onerror = () => { povWrap.style.display = "none"; };
+  pov.onloadeddata = () => { povWrap.style.display = "block"; syncPov(); };
+  pov.src = `/pov/${c}_seed${s}.mp4`;
   document.body.dataset.loaded = $("run-select").value;  // 联调脚本的加载完成信号
   render();
+}
+
+const POV_FPT = 5, POV_FPS = 30;
+function syncPov() {
+  const pov = $("pov-video");
+  if ($("pov-wrap").style.display === "none" || !pov.duration) return;
+  pov.currentTime = Math.min(pov.duration - 0.03, (cur + 1) * POV_FPT / POV_FPS);
 }
 
 function robotPos(t) {
@@ -152,6 +170,7 @@ function batteryPct(t) {
 function render() {
   $("tick-label").textContent = cur;
   $("tick-slider").value = cur;
+  syncPov();
   const bat = batteryPct(cur);
   $("battery-label").textContent = bat === null ? "≈100%" : bat.toFixed(1) + "%";
   $("violation-label").textContent = violationsAt.filter(v => v.tick <= cur).length;
