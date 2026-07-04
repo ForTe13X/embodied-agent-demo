@@ -1,0 +1,8 @@
+# Phase B Day-4 编排镜像:在 nav2 镜像上加 embodied_agent 的编排依赖(langgraph/pydantic)。
+# 这样【同一套 LangGraph 编排图 + Tool Registry】能在容器内直接驱动真实 Nav2(换 adapter 而已)。
+FROM phase-b-nav2:latest
+
+# 清华 PyPI 镜像(国内网络);--break-system-packages 因 Ubuntu 24.04 PEP 668 外部管理
+RUN pip install --no-cache-dir --break-system-packages \
+    -i https://pypi.tuna.tsinghua.edu.cn/simple \
+    "langgraph~=1.2" "pydantic~=2.13" "pyyaml~=6.0" "rich~=15.0"
