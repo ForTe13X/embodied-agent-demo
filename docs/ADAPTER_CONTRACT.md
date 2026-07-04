@@ -21,7 +21,7 @@ sense(query) / capture() / wait(ticks)
 | 契约状态 | mock 的来源 | rclpy/Nav2 的推导 |
 |---|---|---|
 | `succeeded` | 到达目标节点 | `GoalStatus.SUCCEEDED` |
-| `aborted` + `reason=unreachable` | 节点被隔离/无路由 | `ABORTED` 且 error code ∈ {NO_VALID_PATH, GOAL_UNREACHABLE} |
+| `aborted` + `reason=unreachable` | 节点被隔离/无路由 | `ABORTED`;`NavigateToPose.result.error_code` 为**传播上来的规划器码**(planner `ComputePathToPose` 的 `NO_VALID_PATH` 等,经 bt_navigator 的 `error_code_name_prefixes` 上浮)。注意:`NavigateToPose` 自身只定义 `NONE=0 / UNKNOWN=9000 / FAILED_TO_LOAD_BEHAVIOR_TREE=9001 / TF_ERROR=9002 / TIMEOUT=9003`,不含 `NO_VALID_PATH`(见 PHASE_B_DESIGN.md §错误码映射) |
 | `canceled` | cancel() | `CANCELED` |
 | **受阻(无独立状态!)** | 边被阻断 → progress 停滞、velocity=0 | feedback 中 `distance_remaining` 停滞、速度≈0 |
 
