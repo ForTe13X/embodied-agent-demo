@@ -4,3 +4,5 @@ __pycache__/
 .pytest_cache/
 # runs/ 故意入库:RESULTS.md 引用逐 run 日志作为审计证据(复审 finding)
 scripts/recording/media/
+# Phase B:MCAP 审计包是运行产物(~6MB),可由 smoke_day3c.sh 复现,不入库
+phase_b/audit_bag/
