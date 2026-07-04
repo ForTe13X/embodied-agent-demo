@@ -1,0 +1,13 @@
+# node_id -> map 米坐标(RclpyAdapter 查此表把 node 转 pose)
+waypoints:
+  dock: {x: 1.200, y: 6.000, yaw: 0.0, access: free}
+  c1: {x: 9.000, y: 6.000, yaw: 0.0, access: free}
+  c2: {x: 16.800, y: 6.000, yaw: 0.0, access: free}
+  a1: {x: 25.200, y: 6.000, yaw: 0.0, access: free}
+  a2: {x: 31.200, y: 12.000, yaw: 0.0, access: free}
+  a3: {x: 36.000, y: 18.600, yaw: 0.0, access: free}
+  a3_alt: {x: 27.600, y: 19.800, yaw: 0.0, access: free}
+  b1: {x: 11.400, y: 14.400, yaw: 0.0, access: free}
+  b2: {x: 21.600, y: 17.400, yaw: 0.0, access: free}
+  r1: {x: 25.200, y: 1.200, yaw: 0.0, access: restricted}
+  f1: {x: 4.200, y: 13.800, yaw: 0.0, access: forbidden}

@@ -1,0 +1,18 @@
+<!--
+  裸 BT 变体:【不重规划】。用 Sequence(有记忆)而非 PipelineSequence+RateController,
+  ComputePathToPose 只在开头 tick 一次 → 计划固定;之后只 tick FollowPath。
+  用途:在真实栈复现 mock 的「停滞」语义 —— 计划算好后若某段路被 keepout 封死(且局部代价地图
+  也装了 keepout 滤镜),MPPI 到该段无法前进、velocity→0、distance_remaining 停滞,而【不会】
+  像默认裸 BT(1Hz 重规划)那样自动改道。停滞由上层 observer 的水位(stall_ticks)判定,
+  与 mock 的 blocked 语义 1:1。这不是给评测用的默认树,只为演示 blocked 分支。
+-->
+<root BTCPP_format="4" main_tree_to_execute="MainTree">
+  <BehaviorTree ID="MainTree">
+    <Sequence name="PlanOnceThenFollow">
+      <ComputePathToPose goal="{goal}" path="{path}" planner_id="GridBased"
+                         error_code_id="{compute_path_error_code}"/>
+      <FollowPath path="{path}" controller_id="FollowPath"
+                  error_code_id="{follow_path_error_code}"/>
+    </Sequence>
+  </BehaviorTree>
+</root>
