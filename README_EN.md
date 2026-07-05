@@ -8,12 +8,23 @@
 
 A simulation demo for an embodied-agent orchestration layer. The language model is limited to intent parsing; navigation, recovery, safety checks, and evaluation are handled by deterministic code.
 
-This repository focuses on the control layer around a robot-like agent: task planning, tool gating, fault recovery, replay, and repeatable evaluation. It does not claim real-robot validation. The current backend is a mock navigation server, with a `RobotAdapter` boundary prepared for future Nav2/rclpy integration. See [docs/ADAPTER_CONTRACT.md](docs/ADAPTER_CONTRACT.md).
+This repository focuses on the control layer around a robot-like agent: task planning, tool gating, fault recovery, replay, and repeatable evaluation. The main demo and the 90-run pre-registered evaluation run on a mock navigation server (simulation, no physical robot). See the `RobotAdapter` boundary in [docs/ADAPTER_CONTRACT.md](docs/ADAPTER_CONTRACT.md).
+
+> **First time here?** Start with the [terminology & codename cheat-sheet (docs/GLOSSARY.md)](docs/GLOSSARY.md) — one page covering mock⇄real, nav2_loopback_sim, the topology codenames, and the system layers that the other docs use liberally.
+
+**Phase B (done):** swapping in one adapter connects this **same LangGraph orchestration graph** to **real ROS 2 Nav2** (Jazzy + nav2_loopback_sim, in a container) with zero orchestration-code changes. Faults are injected via a keepout costmap filter; recovery comes from the deterministic kernel's lookup table — mock ⇄ real Nav2 is interchangeable, verified 1:1 against the real stack. Measured runs and reproduction: [phase_b/FINDINGS.md](phase_b/FINDINGS.md).
+
+![Day-4 real-integration POV excerpt: the same orchestration graph driving real Nav2; a3 ruled unreachable by keepout, deterministic recovery substitutes a3_alt](docs/recording/day4_demo.gif)
+
+*13-second excerpt (the fault-recovery moment of a real run); full 3-minute narrated bilingual version: [docs/recording/day4_demo.mp4](docs/recording/day4_demo.mp4).*
+
+**Phase C (done):** the pre-registered fault-injection eval, graduated from mock to real Nav2 on the portable conditions — all match terminal state (mock ⇄ real). See [phase_c/PHASE_C_RESULTS.md](phase_c/PHASE_C_RESULTS.md).
 
 ## Included Artifacts
 
 | Artifact | Location |
 |---|---|
+| **Terminology & codename cheat-sheet (read this first)** | [docs/GLOSSARY.md](docs/GLOSSARY.md) |
 | Demo recording, about 4 minutes, with bilingual subtitles | [docs/recording/demo.mp4](docs/recording/demo.mp4) + [demo.srt](docs/recording/demo.srt) |
 | Godot 4 POV rendering pipeline driven by ground-truth trajectories | [povgen/](povgen/) + [scripts/export_traj.py](scripts/export_traj.py) |
 | Local VLM frame annotation experiment and limitation notes | [scripts/vlm_annotate.py](scripts/vlm_annotate.py) -> [annotated frame](docs/screenshots/vlm_live_annotated.png) |
@@ -23,6 +34,11 @@ This repository focuses on the control layer around a robot-like agent: task pla
 | Test matrix and manual checks | [docs/TESTCASES.md](docs/TESTCASES.md) |
 | Product scope and roadmap | [docs/PRODUCT.md](docs/PRODUCT.md) |
 | Evaluation protocol, predictions, and reports | [EVAL_PREREG.md](EVAL_PREREG.md), [prereg.yaml](prereg.yaml), [RESULTS.md](RESULTS.md), [REVIEW.md](REVIEW.md) |
+| **Phase B**: real Nav2 integration + fault injection + MCAP audit (measured) | [phase_b/FINDINGS.md](phase_b/FINDINGS.md) |
+| Phase B: RclpyAdapter (real RobotAdapter implementation) + real_runtime shim | [phase_b/rclpy_adapter.py](phase_b/rclpy_adapter.py), [phase_b/real_runtime.py](phase_b/real_runtime.py) |
+| Phase B: same LangGraph graph driving real Nav2 through a fault-recovery mission | [phase_b/run_real_mission.py](phase_b/run_real_mission.py) + [real_mission_events.jsonl](phase_b/real_mission_events.jsonl) |
+| Phase B: Day-4 real-integration POV demo (3-min narrated bilingual) | [docs/recording/day4_demo.mp4](docs/recording/day4_demo.mp4) |
+| **Phase C**: reduced real-Nav2 eval (mock⇄real comparison: 4 conditions × repeats, same terminal state) | [phase_c/PHASE_C_RESULTS.md](phase_c/PHASE_C_RESULTS.md) + [phase_c/run_real_eval.py](phase_c/run_real_eval.py) |
 
 ## Quick Start
 
@@ -110,7 +126,7 @@ Current matrix:
 
 ## Scope
 
-- The project is mock-only. Battery, sensor, and tool-failure injection are simulator features.
+- The 90-run pre-registered evaluation is mock-only; battery, sensor, and tool-failure injection are simulator-only features. The navigation adapter and nav-class faults were migrated to real ROS 2 Nav2 in Phase B/C (see [phase_b/FINDINGS.md](phase_b/FINDINGS.md), [phase_c/PHASE_C_RESULTS.md](phase_c/PHASE_C_RESULTS.md)).
 - Combined blocked-route and low-battery cases can still drain the battery if the return path is blocked long enough.
 - Route memory treats blocked edges as blocked for the rest of the run.
 - A single navigation call carries one approval token, so combined approval cases stay conservative.

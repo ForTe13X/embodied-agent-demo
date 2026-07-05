@@ -155,7 +155,7 @@ docs/
 
 ## 边界
 
-- 当前是 mock-only。battery、sensor 和 tool failure 注入是模拟器能力；导航 adapter 契约是最先计划迁移到真实底盘的部分。
+- 90 条预注册评测是 mock-only；battery、sensor、tool failure 注入是仅 mock 的模拟器能力。导航 adapter 与 nav 类故障已在 Phase B/C 迁移到真实 ROS 2 Nav2(见 [phase_b/FINDINGS.md](phase_b/FINDINGS.md)、[phase_c/PHASE_C_RESULTS.md](phase_c/PHASE_C_RESULTS.md))。
 - 在路线受阻与低电量叠加时，如果回坞路线也被拖住，仍可能耗尽电量。当前策略暴露这个风险，不把它隐藏成成功。
 - route memory 在单个 run 内把受阻边当成持续不可用，因此临时障碍可能导致保守降级。
 - 一次 navigation call 只携带一个审批 token。若目标同时需要受限区与低电量审批，当前策略保持阻断。
