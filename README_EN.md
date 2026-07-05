@@ -2,7 +2,7 @@
 
 [中文](README.md)
 
-![Demo excerpt: mission-control replay around a blocked edge, first-person view reaching the crate stack, the VLM locking onto the anomaly, and the gates-off ablation flashing ground-truth violations](docs/recording/demo.gif)
+![Demo excerpt: the control dashboard replays the robot detouring around a blocked path, a first-person view approaching the crate stack, the vision AI locking onto an anomaly, and — with safety guards switched off — the system flashing red as it flags rule violations](docs/recording/demo.gif)
 
 *16-second excerpt; full 4-minute narrated video: [docs/recording/demo.mp4](docs/recording/demo.mp4).*
 
@@ -14,11 +14,11 @@ This repository focuses on the control layer around a robot-like agent: task pla
 
 **Phase B (done):** swapping in one adapter connects this **same LangGraph orchestration graph** to **real ROS 2 Nav2** (Jazzy + nav2_loopback_sim, in a container) with zero orchestration-code changes. Faults are injected via a keepout costmap filter; recovery comes from the deterministic kernel's lookup table — mock ⇄ real Nav2 is interchangeable, verified 1:1 against the real stack. Measured runs and reproduction: [phase_b/FINDINGS.md](phase_b/FINDINGS.md).
 
-![Day-4 real-integration POV excerpt: the same orchestration graph driving real Nav2; a3 ruled unreachable by keepout, deterministic recovery substitutes a3_alt](docs/recording/day4_demo.gif)
+![Day-4 real-robot integration excerpt: the same orchestration now drives a real navigation stack (ROS 2 Nav2); when inspection point a3 is fenced off and ruled unreachable, the system automatically reroutes to backup point a3_alt by a preset rule](docs/recording/day4_demo.gif)
 
-*13-second excerpt (the fault-recovery moment of a real run); full 3-minute narrated bilingual version: [docs/recording/day4_demo.mp4](docs/recording/day4_demo.mp4).*
+*13-second excerpt (the fault-recovery moment from one real run); full 3-minute narrated bilingual version: [docs/recording/day4_demo.mp4](docs/recording/day4_demo.mp4).*
 
-**Phase C (done):** the pre-registered fault-injection eval, graduated from mock to real Nav2 on the portable conditions — all match terminal state (mock ⇄ real). See [phase_c/PHASE_C_RESULTS.md](phase_c/PHASE_C_RESULTS.md).
+**Phase C (done):** we re-ran the pre-registered fault-injection eval on the real robot navigation stack (Nav2), not just in simulation. On the conditions that carry over, the real robot and the simulation reach the exact same final outcome. See [phase_c/PHASE_C_RESULTS.md](phase_c/PHASE_C_RESULTS.md).
 
 ## Included Artifacts
 
@@ -26,8 +26,8 @@ This repository focuses on the control layer around a robot-like agent: task pla
 |---|---|
 | **Terminology & codename cheat-sheet (read this first)** | [docs/GLOSSARY.md](docs/GLOSSARY.md) |
 | Demo recording, about 4 minutes, with bilingual subtitles | [docs/recording/demo.mp4](docs/recording/demo.mp4) + [demo.srt](docs/recording/demo.srt) |
-| Godot 4 POV rendering pipeline driven by ground-truth trajectories | [povgen/](povgen/) + [scripts/export_traj.py](scripts/export_traj.py) |
-| Local VLM frame annotation experiment and limitation notes | [scripts/vlm_annotate.py](scripts/vlm_annotate.py) -> [annotated frame](docs/screenshots/vlm_live_annotated.png) |
+| Godot 4 tooling that renders the first-person-view (POV) footage, driven by the robot's actual path | [povgen/](povgen/) + [scripts/export_traj.py](scripts/export_traj.py) |
+| Local vision AI (VLM) annotating anomalies in inspection frames — experiment plus limitations | [scripts/vlm_annotate.py](scripts/vlm_annotate.py) -> [annotated frame](docs/screenshots/vlm_live_annotated.png) |
 | Synchronized replay viewer with POV panels | [viewer/pov/](viewer/pov/) |
 | Tool API, errors, sequences, and expected outputs | [docs/API.md](docs/API.md) |
 | User manual with screenshots | [docs/USER_MANUAL.md](docs/USER_MANUAL.md) |

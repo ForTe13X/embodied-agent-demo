@@ -2,7 +2,7 @@
 
 [English](README_EN.md)
 
-![演示节选:三视图指挥台绕行受阻边、POV 撞上箱堆、VLM 锁定异常、消融违规红闪](docs/recording/demo.gif)
+![演示节选:指挥台三视角回放机器人绕开被堵路段、第一人称视角撞上箱堆、视觉AI锁定异常物、以及关掉安全防护做对照时系统红闪报出违规](docs/recording/demo.gif)
 
 *16 秒节选;完整 4 分钟配音版见 [docs/recording/demo.mp4](docs/recording/demo.mp4)。*
 
@@ -14,9 +14,9 @@
 
 **Phase B（已跑通）**：换一个 adapter，把这套**同一个 LangGraph 编排图**接到**真实 ROS 2 Nav2**（Jazzy + nav2_loopback_sim，容器内），编排代码一行未改。故障用 keepout 代价地图滤镜注入，恢复由确定性内核查表——mock ⇄ 真实 Nav2 可换，是在真机栈上核对通过的事实。全过程实测与复现见 [phase_b/FINDINGS.md](phase_b/FINDINGS.md)。
 
-![Day-4 真实集成 POV 节选：同一编排图驱动真实 Nav2，a3 被 keepout 判不可达 → 确定性恢复替换 a3_alt](docs/recording/day4_demo.gif)
+![Day-4 真机接入节选：同一套编排逻辑这次驱动真实机器人导航栈（ROS 2 Nav2）；巡检点 a3 被设了禁行区、判定去不了后，系统按预设规则自动改去备用点 a3_alt](docs/recording/day4_demo.gif)
 
-*13 秒节选(真实 run 的故障恢复瞬间);完整 3 分钟中英配音版见 [docs/recording/day4_demo.mp4](docs/recording/day4_demo.mp4)。*
+*13 秒节选(一次真实任务里故障恢复的瞬间);完整 3 分钟中英配音版见 [docs/recording/day4_demo.mp4](docs/recording/day4_demo.mp4)。*
 
 ## 包含内容
 
@@ -24,8 +24,8 @@
 |---|---|
 | **术语与代号速查(新读者先读)** | [docs/GLOSSARY.md](docs/GLOSSARY.md) |
 | 约 4 分钟演示录屏，含中英字幕 | [docs/recording/demo.mp4](docs/recording/demo.mp4) + [demo.srt](docs/recording/demo.srt) |
-| Godot 4 POV 渲染管线，由地面真值轨迹驱动 | [povgen/](povgen/) + [scripts/export_traj.py](scripts/export_traj.py) |
-| 本地 VLM 巡检帧标注实验与局限记录 | [scripts/vlm_annotate.py](scripts/vlm_annotate.py) -> [标注帧](docs/screenshots/vlm_live_annotated.png) |
+| Godot 4 做的第一人称(POV)画面渲染管线，由机器人实际走过的真实轨迹驱动 | [povgen/](povgen/) + [scripts/export_traj.py](scripts/export_traj.py) |
+| 用本地视觉AI(VLM)给巡检画面标注异常的实验，以及它的局限记录 | [scripts/vlm_annotate.py](scripts/vlm_annotate.py) -> [标注帧](docs/screenshots/vlm_live_annotated.png) |
 | 同步回放 viewer 与 POV 面板 | [viewer/pov/](viewer/pov/) |
 | 工具 API、错误码、时序与预期输出 | [docs/API.md](docs/API.md) |
 | 带截图的用户手册 | [docs/USER_MANUAL.md](docs/USER_MANUAL.md) |
