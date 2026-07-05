@@ -1,0 +1,22 @@
+<!--
+  裸 BT 变体:【仅规划重试,无物理自恢复】(评审 PLAUSIBLE 项的受控修复)。
+  把"不重试规划失败"与"不做物理自恢复(Spin/BackUp/ClearCostmap)"两件事拆开:
+  用 RetryUntilSuccessful 只对 ComputePathToPose 做有限次重试,吸收启动抖动
+  (costmap 首帧未就绪导致的偶发规划失败),但【绝不】引入任何转圈/后退/清图恢复动作。
+  用途:批量评测时避免"首拍抖动被误判成不可达故障"污染统计。默认树仍是 bare_nav_to_pose.xml
+  (真正零容错,recoveries=0 已固化);本变体是 opt-in 的评测鲁棒版。
+-->
+<root BTCPP_format="4" main_tree_to_execute="MainTree">
+  <BehaviorTree ID="MainTree">
+    <PipelineSequence name="NavigateWithReplanning">
+      <RateController hz="1.0">
+        <RetryUntilSuccessful num_attempts="3">
+          <ComputePathToPose goal="{goal}" path="{path}" planner_id="GridBased"
+                             error_code_id="{compute_path_error_code}"/>
+        </RetryUntilSuccessful>
+      </RateController>
+      <FollowPath path="{path}" controller_id="FollowPath"
+                  error_code_id="{follow_path_error_code}"/>
+    </PipelineSequence>
+  </BehaviorTree>
+</root>

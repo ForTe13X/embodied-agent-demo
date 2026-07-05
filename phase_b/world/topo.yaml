@@ -1,0 +1,27 @@
+# 拓扑真值(派生自 embodied_agent.world.default_map)
+nodes:
+  a1: {name: A区-巡检点1, access: free, neighbors: [a2, c2]}
+  a2: {name: A区-巡检点2, access: free, neighbors: [a1, a3, a3_alt, b2]}
+  a3: {name: A区-巡检点3, access: free, neighbors: [a2, a3_alt, r1]}
+  a3_alt: {name: A区-3号替代观测点, access: free, neighbors: [a2, a3]}
+  b1: {name: B区-通道1, access: free, neighbors: [b2, c1]}
+  b2: {name: B区-通道2, access: free, neighbors: [a2, b1]}
+  c1: {name: 走廊1, access: free, neighbors: [b1, c2, dock, f1]}
+  c2: {name: 走廊2, access: free, neighbors: [a1, c1, r1]}
+  dock: {name: 充电坞, access: free, neighbors: [c1]}
+  f1: {name: 禁入区-配电室, access: forbidden, neighbors: [c1]}
+  r1: {name: 受限区-捷径, access: restricted, neighbors: [a3, c2]}
+edges:
+  - [a1, a2, 3]
+  - [a1, c2, 3]
+  - [a2, a3, 4]
+  - [a2, a3_alt, 5]
+  - [a2, b2, 4]
+  - [a3, a3_alt, 2]
+  - [a3, r1, 2]
+  - [b1, b2, 4]
+  - [b1, c1, 4]
+  - [c1, c2, 3]
+  - [c1, dock, 3]
+  - [c1, f1, 2]
+  - [c2, r1, 2]

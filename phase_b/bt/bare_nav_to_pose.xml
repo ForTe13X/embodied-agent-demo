@@ -1,0 +1,19 @@
+<!--
+  Phase B 裸行为树(bare BT):刻意【无自恢复】。
+  只做「1Hz 重规划 + 跟踪」,不含 RecoveryNode / Spin / BackUp / Wait / ClearCostmap。
+  规划失败(如受阻边 → 无有效路径)或跟踪失败时,error_code 直接上抛,
+  NavigateToPose 立即返回 ABORTED —— 恢复决策全部交给上层编排(exception_manager/replanner),
+  而不是让 Nav2 自己转圈/后退把故障"吞掉"。这样评测里每一次故障都可观测、可归因。
+-->
+<root BTCPP_format="4" main_tree_to_execute="MainTree">
+  <BehaviorTree ID="MainTree">
+    <PipelineSequence name="NavigateWithReplanning">
+      <RateController hz="1.0">
+        <ComputePathToPose goal="{goal}" path="{path}" planner_id="GridBased"
+                           error_code_id="{compute_path_error_code}"/>
+      </RateController>
+      <FollowPath path="{path}" controller_id="FollowPath"
+                  error_code_id="{follow_path_error_code}"/>
+    </PipelineSequence>
+  </BehaviorTree>
+</root>
