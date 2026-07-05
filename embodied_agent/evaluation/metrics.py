@@ -212,7 +212,8 @@ def render_results(runs_root: Path, prereg_path: Path, out_path: Path) -> str:
     repo = prereg_path.parent
 
     lines = ["# 评测结果(自动生成,请勿手改)", ""]
-    lines.append(f"- adapter: **mock**(仿真,无实机;Phase B 未跑)")
+    lines.append("- adapter: **mock**(此 90-run 预注册评测为仿真 mock server)"
+                 "；真实 Nav2 的缩减评测(mock⇄real 对比)见 [phase_c/PHASE_C_RESULTS.md](phase_c/PHASE_C_RESULTS.md)")
     lines.append(f"- 代码 commit: `{_git_hash(repo)}`;预注册 `prereg.yaml` commit: `{_git_hash(repo, 'prereg.yaml')}`")
     lines.append(f"- seeds: {prereg['seeds']}(固定,禁止 seed-shopping)")
     lines.append(f"- 指标由 `metrics.py` 只读 `runs/**.jsonl` 事件日志计算,不读 agent 内存")
