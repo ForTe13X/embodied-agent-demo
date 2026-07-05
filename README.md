@@ -33,6 +33,7 @@
 | Phase B:RclpyAdapter(RobotAdapter 真实实现)+ real_runtime shim | [phase_b/rclpy_adapter.py](phase_b/rclpy_adapter.py), [phase_b/real_runtime.py](phase_b/real_runtime.py) |
 | Phase B:同一 LangGraph 图驱动真实 Nav2 跑故障恢复任务 | [phase_b/run_real_mission.py](phase_b/run_real_mission.py) + [real_mission_events.jsonl](phase_b/real_mission_events.jsonl) |
 | Phase B:Day-4 真实集成 POV 演示(3 分钟中英配音) | [docs/recording/day4_demo.mp4](docs/recording/day4_demo.mp4) |
+| **Phase C**:真实 Nav2 缩减评测(mock⇄real 对比:4 条件 × 重复,同终态) | [phase_c/PHASE_C_RESULTS.md](phase_c/PHASE_C_RESULTS.md) + [phase_c/run_real_eval.py](phase_c/run_real_eval.py) |
 
 媒体生成脚本使用系统 Python：
 
