@@ -1,84 +1,84 @@
 1
-00:00:00,600 --> 00:00:06,710
-同一套编排图,这次跑在真实的 ROS 2 Nav2 上。
-The same orchestration graph — this time on real ROS 2 Nav2.
+00:00:00,600 --> 00:00:10,400
+还是那套任务编排流程,这次不再是仿真,而是真正驱动机器人的导航系统(ROS 2 Nav2)。
+The same task-orchestration flow — no longer a simulation, now driving a real robot's navigation system (ROS 2 Nav2).
 
 2
-00:00:07,710 --> 00:00:16,650
-Phase A 在仿真底盘上验证过:大模型只出高层意图,安全和恢复是确定性查表。
-Phase A proved it on a mock chassis: the model only sets high-level intent; safety and recovery are deterministic lookups.
+00:00:11,400 --> 00:00:20,960
+第一阶段在纯仿真里验证过:大模型只出高层意图,安全和恢复都是照着固定的表来查。
+The first phase proved it in pure simulation: the model only sets high-level intent; safety and recovery are deterministic lookups.
 
 3
-00:00:16,750 --> 00:00:26,460
-现在我们把那张一模一样的 LangGraph 图接到真实 Nav2,只换掉 adapter,编排代码一行没动。
-Now we wire that identical LangGraph to real Nav2 — swapping only the adapter, with zero changes to the orchestration code.
+00:00:21,060 --> 00:00:33,910
+现在我们把那张一模一样的流程图接到真实的导航系统,只替换中间那层负责"翻译"的适配层——负责做决策的编排代码,一行没动。
+Now we connect that identical flow to the real navigation system, swapping out only the thin adapter layer that translates decisions into robot commands. The decision-making code itself: not one line changed.
 
 4
-00:00:26,560 --> 00:00:40,730
-而且这是结构性保证:这个 adapter 节点只暴露导航目标接口,枚举它的发布话题里没有任何速度或力矩通道——大模型拿不到底盘的速度控制。
-And it's a structural guarantee: the adapter node exposes only a navigation-goal interface. Enumerate its publishers and there's no velocity or torque channel — the model simply cannot command the chassis's speed.
+00:00:34,010 --> 00:00:54,950
+而且这是设计上的硬隔离,不是靠自觉:这层"插头"只开放了"去哪儿"这一个接口——数一遍它能下的所有指令,里面根本没有"跑多快""使多大劲"这类通道。所以大模型只能指定目的地,永远无法直接控制机器人的速度。
+And it's a hard barrier built into the design, not good behavior: this "plug" exposes only a single "where to go" interface — count every command it can issue and there's no "how fast" or "how hard" channel at all. So the model can name a destination but can never directly control the robot's speed.
 
 5
-00:00:41,730 --> 00:00:51,940
+00:00:55,950 --> 00:01:06,160
 任务从充电坞出发,巡检 A 区的两个观测点。这个第一人称视角,就是机器人此刻真正看到的仓库。
 The mission leaves the dock to patrol two points in zone A. This first-person view is the warehouse the robot actually sees.
 
 6
-00:00:52,040 --> 00:01:01,990
-真实的 Nav2 规划器和 MPPI 控制器驱动机器人满速沿走廊前进,到达第一个观测点 a2。
-Real Nav2 — planner and MPPI controller — drives it down the corridor at full speed to the first point, a2.
+00:01:06,260 --> 00:01:16,060
+真实的 Nav2 导航系统自己规划路径、控制机器人满速沿走廊前进,到达第一个观测点 a2。
+Real Nav2 plans the path and drives it down the corridor at full speed to the first point, a2.
 
 7
-00:01:02,090 --> 00:01:14,650
-接着它要去 a3。但我们用 keepout 代价地图滤镜把 a3 封成了禁区——真实规划器找不到有效路径,返回 ABORTED。
-Next it heads for a3. But a keepout costmap filter has sealed a3 off — the real planner finds no valid path and returns ABORTED.
+00:01:16,160 --> 00:01:30,620
+接着它要去第二个观测点 a3。但我们故意在 a3 周围划了一片"禁行区"、把路封死——真实的导航系统怎么也找不到能过去的路,只好放弃这个目标。
+Next it heads for the second point, a3. But we've deliberately fenced off a no-go zone around a3, sealing the way in — so the real navigation system can't find any route there and gives up on that goal.
 
 8
-00:01:14,750 --> 00:01:28,100
-这个故障不是模拟出来的:是 Nav2 的 costmap 滤镜服务在运行时把 a3 周围的栅格改成致死代价,真实规划器据此拒绝了目标。
-The fault isn't faked: a Nav2 costmap-filter service marks the cells around a3 as lethal at runtime, and the real planner rejects the goal on that basis.
+00:01:30,720 --> 00:01:44,220
+而且这个故障是真的、不是演出来的:导航系统在运行中真的把 a3 周围的格子标成了"绝对不能走",真实的路径规划因此拒绝了这个目标。
+And this failure is genuine, not staged: at runtime the navigation system really marks the area around a3 as strictly impassable, so the real path planner refuses the goal.
 
 9
-00:01:28,200 --> 00:01:37,790
-编排层的 observer 用同一套水位检测,把这次失败判成‘节点不可达’——和仿真语义逐字一致。
-The observer applies the same watchdog and classifies it as node-unreachable — byte-for-byte the mock's semantics.
+00:01:44,320 --> 00:01:56,040
+系统里负责盯梢的监控模块用同一套判断规则,把这次失败归为"目的地到不了"——和之前仿真版的判定逻辑一模一样。
+The same monitoring module watches the run and flags this failure as "destination unreachable" — exactly the logic the earlier simulated version used.
 
 10
-00:01:37,890 --> 00:01:49,250
-异常管理器做确定性查表:从 a3 的合法邻接闭集里枚举替代点,选中专门的替代观测点 a3_alt。
-The exception manager does a deterministic lookup: from a3's legal neighbors it enumerates substitutes and picks the dedicated alternate, a3_alt.
+00:01:56,140 --> 00:02:09,040
+异常处理模块不靠猜,只按预先定好的表来查:在 a3 事先允许的几个邻近点里,挑出专门准备好的备用观测点 a3_alt。
+The exception handler doesn't guess — it checks a predefined table: among the few neighboring points allowed for a3, it picks the purpose-built backup, a3_alt.
 
 11
-00:01:49,350 --> 00:01:59,660
-重规划器改写任务队列,机器人转向 a3_alt——真实 Nav2 这一次规划成功、平稳到达。
-The replanner rewrites the queue; the robot turns to a3_alt, and this time real Nav2 plans a path and arrives cleanly.
+00:02:09,140 --> 00:02:20,290
+重规划模块改写任务清单,机器人转向备用点 a3_alt——真实的导航系统这一次规划成功、平稳到达。
+The replanner rewrites the task list; the robot turns to the backup point a3_alt, and this time the real navigation system plans a path and arrives cleanly.
 
 12
-00:01:59,760 --> 00:02:11,310
-整段导航还被录进了 MCAP 审计包——轨迹、规划路径、控制指令,还有故障注入本身,逐条留痕、可回放。
-The whole run is also recorded to an MCAP audit bag — trajectory, planned paths, control commands, and the fault injection itself, all traceable and replayable.
+00:02:20,390 --> 00:02:33,070
+整段导航还被完整录进了一份审计包——走过的轨迹、规划的路径、下达的控制指令,还有故障注入本身,逐条留痕、可回放。
+The whole run is also recorded to an audit bag — the path walked, the routes planned, the control commands issued, and the fault injection itself, all traceable and replayable.
 
 13
-00:02:11,410 --> 00:02:17,280
+00:02:33,170 --> 00:02:39,040
 观测完成,机器人沿走廊返回充电坞,任务闭环。
 Observation done, it returns down the corridor to the dock — mission closed.
 
 14
-00:02:18,280 --> 00:02:29,310
-整段跑下来 672 条事件,日志格式和仿真逐字段一致——同一个回放器、同一套指标脚本,直接就能用。
-The run logged 672 events in a schema identical to the mock — the same replayer and metrics scripts just work.
+00:02:40,040 --> 00:02:51,280
+整段跑下来 672 条事件,日志格式和仿真版逐字段一致——同一个回放器、同一套评分脚本,直接就能用。
+The run logged 672 events in a format identical to the simulated one — the same replayer and scoring scripts just work.
 
 15
-00:02:29,410 --> 00:02:41,560
-从异步 goal-handle 契约,到白名单、审批 token、停滞水位,mock 和真实 Nav2 可换,是在真机栈上核对通过的事实。
-From the async goal-handle contract to the whitelist, approval tokens and stall watchdog — mock and real Nav2 are interchangeable, verified on the real stack.
+00:02:51,380 --> 00:03:08,930
+从"下达目标后异步等结果"的约定,到"只允许清单内动作""越权先审批""卡住就报警"这几道安全闸门——仿真版和真实导航系统随时可换,而且是在真实机器人上跑通、逐条核对过的。
+From the way it hands off a goal and waits for the result, to the safety gates — only allow-listed actions, anything beyond needs approval, and an alarm the moment it gets stuck — the simulated and real navigation systems are fully interchangeable, checked on the real robot stack.
 
 16
-00:02:41,660 --> 00:02:55,350
-这套真实适配器上线前,先过了一轮多 agent 对抗评审:26 条发现里 22 条经独立验证,两个会让集成崩溃的高危缺陷当场修掉。
-Before this real adapter shipped, it passed an adversarial multi-agent review: 22 of 26 findings survived verification, and two integration-breaking bugs were fixed on the spot.
+00:03:09,030 --> 00:03:28,820
+这套连真实机器人的适配层上线前,先让好几个 AI 互相挑刺、做了一轮对抗式代码审查:提出的 26 个问题里,22 个经复核确认属实,其中两个会直接让整套系统崩掉的严重缺陷被当场修好。
+Before this real-robot adapter shipped, several AIs adversarially reviewed each other's work: of 26 issues raised, 22 held up on double-check, and two severe bugs that would have crashed the whole system were fixed on the spot.
 
 17
-00:02:56,350 --> 00:03:06,130
+00:03:29,820 --> 00:03:39,600
 不是设计口号,是跑通的闭环:大模型负责想法,确定性内核负责安全,底盘可以随时替换。
 Not a slogan but a working loop: the model owns the ideas, the deterministic core owns safety, and the chassis is swappable.
