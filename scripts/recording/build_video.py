@@ -44,22 +44,22 @@ LINES = [
         "In the next four minutes, watch how it is verified."),
     (2, "自然语言先做意图解析,本地大模型可选,规则兜底",
         "Natural language goes through intent parsing: local LLM optional, rules as fallback."),
-    (2, "任务由六节点状态图驱动:规划、执行、观察、异常、重规划、报告",
-        "A six-node graph runs the task: plan, execute, observe, classify, replan, report."),
-    (2, "所有动作只能走工具注册表:白名单、模式校验、熔断、审批令牌",
-        "Every action passes the Tool Registry: whitelist, schemas, circuit breaker, approval tokens."),
-    (2, "底盘之下,地面真值监视器独立记录每次越界",
-        "Below the base, a ground-truth monitor independently records every violation."),
-    (3, "先看导航受阻:第十二拍,故障注入阻断前方这条边",
-        "First, a blocked route: at tick 12, fault injection cuts the edge ahead."),
+    (2, "整个任务按一套固定循环推进:先规划,再执行、观察;一旦出状况就判别原因、重新规划,最后汇报",
+        "The whole task follows one fixed loop: plan, then act and observe; when something goes wrong it diagnoses the cause, replans, and reports."),
+    (2, "每个动作都要先过一道统一的安全关卡:只放行清单内的动作、检查参数合法、出错自动断电、危险操作要凭审批令牌",
+        "Every action must clear one safety gate: only listed actions pass, inputs are checked, faults auto-cut power, and risky moves need an approval token."),
+    (2, "底盘下方有个独立\"裁判\":它不听机器人自己怎么说,只客观记录它每一次越界",
+        "Beneath the base sits an independent referee: it ignores what the robot claims and objectively logs every time it crosses a line."),
+    (3, "先看第一个场景,路被挡住:进行到第12步时,我们人为制造一次故障,封死机器人前方的这段路",
+        "First scene — the road ahead is blocked: at step 12 we deliberately trigger a fault that seals off the path in front of the robot."),
     (3, "底盘不会主动上报,只会原地停滞",
         "The base never reports 'blocked' — it just stalls."),
-    (3, "编排层靠停滞水位检测发现异常,先重试,再避障重规划",
-        "The orchestrator detects stagnation, retries once, then replans around the edge."),
-    (3, "绕行B区到达目标,异常物体拍照上报,全程留痕",
-        "It detours through zone B, reports the anomaly, and logs every decision."),
-    (4, "同一任务在指挥台三视图同轴重放:第一人称、拓扑轨迹、决策日志",
-        "The same run replays in mission control — POV, topo map, decision log on one timeline."),
+    (3, "编排层察觉机器人卡住不动,先自动重试一次,不行就绕开这段路重新规划",
+        "The orchestration layer notices the robot has stalled, retries once, then replans a route around the blockage."),
+    (3, "改走另一条通道绕到目标,顺手把挡路的异常物体拍照上报,全程留痕",
+        "It reroutes down another corridor to the goal, photographs the blocking object to report it, and logs every step."),
+    (4, "同一次任务在指挥台上三个画面同步回放:机器人第一视角、路线拓扑图、以及它每一步的决策记录",
+        "The same run replays in mission control, three views on one timeline: the robot's first-person view, a route map, and a log of every decision."),
     (4, "拓扑图上,红色虚线是被阻断的边,青色圆点是机器人",
         "On the map, the red dashed line is the blocked edge; the teal dot is the robot."),
     (4, "轨迹来自地面真值事件,不是智能体自述",
@@ -68,26 +68,26 @@ LINES = [
         "The event feed is the only data source for all metrics."),
     (5, "再看第一人称:同一任务,仓库由同一张拓扑图程序化生成",
         "Now in first person — a warehouse generated from the same topology."),
-    (5, "相机沿地面真值轨迹运动,和事件日志逐拍对齐",
-        "The camera follows the ground-truth trajectory, tick-aligned with the log."),
-    (5, "前方箱堆,就是注入的受阻边:停滞、倒车、绕行",
-        "The crate stack ahead is the injected blocked edge: stall, back off, detour."),
-    (5, "感知时,视觉模型把结构化观测标在画面上:标签加置信度,不返回动作",
-        "At perceive, the VLM overlay shows label and confidence — structured observation, never actions."),
+    (5, "镜头严格沿着裁判记录的真实轨迹移动,和事件日志一步一步精确对齐",
+        "The camera moves exactly along the referee's recorded true path, matched step by step with the log."),
+    (5, "前方这堆箱子,就是我们故意设下的路障:机器人停住、倒车、再绕行",
+        "The crate stack ahead is the roadblock we planted on purpose: the robot stalls, backs off, then detours."),
+    (5, "机器人观察时,视觉AI在画面上圈出它看到的东西,标上名称和把握有多大——它只负责\"看清并报告\",不替机器人做决定",
+        "When the robot looks, the vision AI boxes what it sees on screen — a label and how confident it is. It only reports; it never decides the robot's next move."),
     (6, "低电量场景:巡检中,电量跌破百分之二十红线",
         "Low battery: mid-patrol, charge drops below the 20 percent red line."),
-    (6, "水位检测在运行中抢占,先快照任务队列",
-        "The watchdog preempts mid-flight; the task queue is snapshotted first."),
+    (6, "系统在任务进行到一半时立刻接管,先把没做完的任务清单原样存下来",
+        "The system takes over right in the middle of the task, first saving the unfinished to-do list exactly as it is."),
     (6, "回坞充电后,从断点继续,原队列一步不丢",
         "The robot docks, recharges, and resumes the original queue — nothing lost."),
-    (6, "红线是静态配置,大模型只能收紧,不能放宽",
-        "The red line is static config; the LLM may tighten it, never loosen it."),
+    (6, "这条红线是写死的规则,AI 只能把它调得更严,绝不能放松",
+        "That red line is a hard-coded rule: the AI can only make it stricter, never relax it."),
     (7, "进入受限区,必须人工审批",
         "Entering a restricted zone requires human approval."),
     (7, "批准后签发一次性令牌:限范围、限时效、用完即废",
         "Approval mints a single-use token — scoped, expiring, spent on use."),
-    (7, "没有令牌,注册表直接拦截;禁入区连令牌也不认",
-        "Without it, the registry blocks the call; forbidden zones accept no token at all."),
+    (7, "没有这张令牌,安全关卡会直接拦下这个动作;而绝对禁入的区域,连令牌也进不去",
+        "Without that token, the safety gate blocks the action outright; and truly off-limits zones accept no token at all."),
     (8, "安全声明要有证据:我们让恶意规划器攻击门禁",
         "Safety claims need evidence — so a malicious planner attacks the gates."),
     (8, "门禁开启:六次越权尝试,六次都拦截,零违规",
@@ -96,20 +96,20 @@ LINES = [
         "The ablation turns gates off: exactly five real violations per run."),
     (8, "红圈闪烁处,就是地面真值记下的每次越界",
         "Each flashing red ring is a violation recorded by the ground truth."),
-    (9, "评测先注册预测,再跑结果,提交历史证明这个顺序",
-        "Predictions are committed before results — git history is the timestamp."),
-    (9, "九个条件乘以十个种子,九十次运行,三十一条预测全部命中",
-        "Nine conditions by ten seeds: ninety runs, all thirty-one predictions hit."),
-    (9, "复合故障里,三次电量耗尽,原样报告,并附事件日志",
-        "The compound fault killed three runs — reported as-is, logs attached."),
-    (9, "代码复审确认三十五个缺陷;修复后按政策重跑,结论不变",
-        "A code review confirmed 35 defects; after fixes, the rerun upheld every prediction."),
+    (9, "评测前我们先把预测写下来存档、盖上时间戳,再去跑实验;时间戳证明我们没有事后改口",
+        "Before testing, we lock in our predictions with a timestamp — then run the experiments. Proof we didn't rewrite them afterward."),
+    (9, "九种场景,每种换十组随机起始条件,共九十次运行,三十一条预测全部命中",
+        "Nine scenarios, each rerun ten times from a different random starting point — ninety runs in all, and all thirty-one predictions held."),
+    (9, "最难的多重故障场景里,有三次机器人电量彻底耗尽——我们照实报失败,并附完整事件日志",
+        "In the hardest multi-failure scenario, three runs ran clean out of power — we report the failures honestly, with full logs attached."),
+    (9, "代码复审查出三十五个缺陷;修好后按事先定下的规则重跑,结论依旧不变",
+        "A code review found 35 defects; after fixing them, we reran by the rules fixed in advance, and every prediction still held."),
     (10, "这是仿真演示,没有实机;边界写在文档第一行",
         "This is a simulation demo, no real robot — stated in line one of the docs."),
-    (10, "换上真实底盘,只需替换一个适配器;契约已经写好",
-        "Swapping in a real base means one adapter — the contract is already written."),
-    (10, "可复现、可回放、可证伪:这就是这段演示要说的",
-        "Reproducible, replayable, falsifiable — that is the whole point."),
+    (10, "要换成真正的机器人,只需替换一个对接模块;它们怎么连、边界在哪,我们已经提前定死了",
+        "To move to a real robot, you only swap one connector — how the pieces plug together is already locked in."),
+    (10, "可复现、可回放、说错了能被验证推翻——这就是这段演示要证明的",
+        "Reproducible, replayable, and provable wrong if we're wrong — that is the whole point."),
 ]
 
 # scene → 画面来源:("img", path) 静态图 | ("clip", key) viewer/POV 实录
@@ -170,31 +170,31 @@ td,th{border:1px solid #2a3542;padding:8px 20px;text-align:left} th{color:#8194a
 SLIDES = {
     "title": """<h1>具身 Agent 任务编排层</h1>
 <h2>Embodied-Agent Orchestration Layer — a measurable reference</h2>
-<ul><li>LLM 只做高层意图 · <b>确定性内核</b>负责安全与恢复</li>
-<li>预注册故障注入 × 10 seed × 指标表,<b>未恢复 case 原样报</b></li>
-<li>mock 底座(仿真,无实机)· adapter 契约可换真实 Nav2</li></ul>
-<div class="foot">run_demo.py · run_eval.py · replay viewer · 31/31 pre-registered predictions</div>""",
+<ul><li>大模型只出高层意图 · <b>确定性内核</b>负责安全与恢复</li>
+<li>预先登记好的故障注入 × 每种 10 次随机 × 指标表,<b>没恢复成功的也原样报</b></li>
+<li>跑在纯软件仿真里(没有真机)· 换一个对接模块即可驱动真实机器人的导航(Nav2)</li></ul>
+<div class="foot">一键演示 · 一键评分 · 过程可回放 · 31 项预测提前登记,全部命中</div>""",
     "arch": """<h1>架构:一条唯一通道</h1>
-<div class="flow">自然语言 → Intent 解析(<b>LM Studio 本地</b> → 云 → 规则兜底)<br>
-&nbsp;&nbsp;→ LangGraph 六节点:planner → executor ⇄ observer → exception_mgr → replanner → reporter<br>
-&nbsp;&nbsp;→ <b>Tool Registry</b>:白名单 · schema(extra=forbid) · 幂等重试 · 熔断 · 审批 token · 电量闸<br>
-&nbsp;&nbsp;→ RobotAdapter(异步 goal-handle,mock ⇄ rclpy)→ MockNavServer<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;└ <span class="bad">地面真值 SafetyMonitor</span>(注册表之下,违规不自评)<br>
-旁路:append-only Event Log —— 每个决策可回放,指标只读日志</div>""",
+<div class="flow">自然语言 → 意图解析(<b>本地大模型</b> → 云 → 规则兜底)<br>
+&nbsp;&nbsp;→ 固定循环:规划 → 执行 ⇄ 监控 → 异常处理 → 重新规划 → 汇报<br>
+&nbsp;&nbsp;→ <b>Tool Registry(工具关卡)</b>:仅放行清单内动作 · 参数严格校验 · 失败可安全重试 · 故障自动断电 · 危险操作需审批 · 低电量强制拦截<br>
+&nbsp;&nbsp;→ 对接层向机器人下发目标点、跟踪执行进度(现接模拟机器人;同一接口可切换真实机器人)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;└ <span class="bad">独立裁判(不听机器人自报,只客观记录违规)</span><br>
+旁路留痕:全程记一份不可篡改的流水账,每步决策都能倒带重放,分数只从这份流水账里算</div>""",
     "results": """<h1>评测:预测先于结果</h1>
-<table><tr><th>条件 × 10 seed</th><th>结果(x/N)</th><th>预注册命中</th></tr>
-<tr><td>baseline / blocked / battery</td><td>completed_full 10/10 ×3</td><td>✓</td></tr>
-<tr><td>unreachable / sensor / tool</td><td>degraded_complete 10/10 ×3</td><td>✓</td></tr>
-<tr><td class="warn">compound(受阻+低电量)</td><td class="warn">6 完成 · 1 安全弃 · <span class="bad">3 电量耗尽(原样报)</span></td><td>✓</td></tr>
-<tr><td>adversarial(门禁开)</td><td>6/6 拦截 · 0 违规</td><td>✓</td></tr>
-<tr><td class="bad">ablation(门禁关)</td><td class="bad">恰好 5 违规/run(地面真值)</td><td>✓</td></tr></table>
-<ul><li>git 历史作证:prereg.yaml 先 commit,结果后跑分;seed 固定,禁止挑种子</li>
-<li>多 agent 复审证实 35 缺陷 → 修复 → 按政策重跑,31/31 仍全部命中</li></ul>""",
+<table><tr><th>场景 × 每种 10 次随机</th><th>结果(成功数/总数)</th><th>预注册命中</th></tr>
+<tr><td>正常 / 走廊被封 / 低电量</td><td>全部圆满完成 10/10 ×3 组</td><td>✓</td></tr>
+<tr><td>目标进不去 / 传感器坏 / 工具失败</td><td>降级也完成 10/10 ×3(改走可达替代目标)</td><td>✓</td></tr>
+<tr><td class="warn">复合故障(受阻+低电量)</td><td class="warn">6 完成 · 1 主动放弃(安全) · <span class="bad">3 电量耗尽(如实计入)</span></td><td>✓</td></tr>
+<tr><td>对抗攻击测试(安全门禁开启)</td><td>危险指令 6/6 全拦下 · 0 违规</td><td>✓</td></tr>
+<tr><td class="bad">消融对照:故意关掉安全闸</td><td class="bad">每次跑都恰好 5 次违规(独立裁判实测)</td><td>✓</td></tr></table>
+<ul><li>有公开时间戳存档为证:预测先写死存档,再跑出结果;随机条件全程固定,不许专挑好看的那次</li>
+<li>多个 AI 审查员交叉复查,主动查出并修复 35 处问题;之后按同一套规则重跑,先前写死的 31 条预测依旧条条命中</li></ul>""",
     "outro": """<h1>可复现 · 可回放 · 可证伪</h1>
-<ul><li>同 seed 事件流<b>逐字节一致</b>(回归测试锁定)</li>
-<li>违规由<b>地面真值监视器</b>记账,完成率不读 agent 自报</li>
-<li>诚实边界:仿真 demo,无实机;mock-only 故障注入如实标注</li>
-<li>Phase B:换一个 adapter 接真实 Nav2 —— 契约与止损线已预先写死</li></ul>
+<ul><li>同样条件下每次跑出来<b>分毫不差、完全一致</b>(有自动测试守住)</li>
+<li>违规和完成率都由<b>独立裁判</b>实测记录,绝不采信机器人自报的成绩</li>
+<li>诚实划清边界:纯软件仿真演示、没有真实机器人;只能在仿真里模拟的故障都明确标注</li>
+<li>换一个对接模块就能驱动真实机器人导航(ROS 2 Nav2)——接口标准和"失败即叫停"的红线提前定死,<b>已在真机栈上跑通验证</b></li></ul>
 <div class="foot">github: embodied-agent-demo · docs/ 全套 API·手册·测试用例·产品文档</div>""",
 }
 

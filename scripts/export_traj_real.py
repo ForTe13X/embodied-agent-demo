@@ -69,22 +69,27 @@ def main():
     waypoints.append({"t": round(tlast, 2), "x": LAYOUT[nlast][0], "y": LAYOUT[nlast][1]})
 
     # 故障/恢复字幕(真实事件驱动)
+    # HUD 字幕用【英文/ASCII 且去术语】(povgen 字体无 CJK 字形;中文靠底部烧录字幕)——
+    # 让不懂 ROS 的英文观众也能读懂:不裸露 nav_unreachable / substitute / a3_alt 等内部枚举。
+    _FAULT_HUD = {"nav_unreachable": "destination unreachable (path blocked)",
+                  "nav_blocked": "path blocked ahead", "low_battery": "battery low",
+                  "sensor_fault": "sensor fault", "tool_failure": "tool failed"}
     captions = []
     for e in ev:
         et, p, t = e["event_type"], e["payload"], e["tick"]
-        # HUD 字幕用英文/ASCII(povgen 字体无 CJK 字形;中文靠底部烧录字幕)
         if et == "plan_built":
-            captions.append({"tick": t, "text": "PLAN: patrol a2 -> a3  (real Nav2)"})
+            captions.append({"tick": t, "text": "MISSION: patrol A-2 to A-3 (real navigation)"})
         elif et == "fault_classified":
-            captions.append({"tick": t, "text": f"FAULT CLASSIFIED: {p.get('fclass','?')}"})
+            captions.append({"tick": t, "text": "FAULT DETECTED: "
+                             + _FAULT_HUD.get(p.get("fclass"), p.get("fclass", "fault"))})
         elif et == "candidate_chosen":
-            captions.append({"tick": t, "text": f"DETERMINISTIC RECOVERY -> substitute {p.get('chosen')}"})
+            captions.append({"tick": t, "text": "AUTO-RECOVERY: reroute to backup observation point"})
         elif et == "recovery_applied":
             a = p.get("action", {})
             if a.get("type") == "substitute":
-                captions.append({"tick": t, "text": f"RETARGET  {a['old']} -> {a['new']}"})
+                captions.append({"tick": t, "text": f"NEW TARGET: {a['old']} -> {a['new']} (backup point)"})
         elif et == "run_summary":
-            captions.append({"tick": t, "text": "MISSION COMPLETE - docked (zero orchestration change)"})
+            captions.append({"tick": t, "text": "MISSION COMPLETE - returned to dock (zero orchestration change)"})
 
     # a3 不可达故障标记(视觉提示:a2 处朝 a3 方向,障碍在 a3)
     blocked = [{"tick": 66.5, "edge": ["a2", "a3"], "pos": list(LAYOUT["a3"])}]
