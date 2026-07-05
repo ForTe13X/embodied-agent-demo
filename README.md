@@ -10,6 +10,8 @@
 
 这个仓库关注机器人式 agent 周围的控制层：任务规划、工具门禁、故障恢复、回放和可复现评测。主 demo 与 90 条预注册评测跑在 mock navigation server 上（仿真，无实机）。`RobotAdapter` 边界见 [docs/ADAPTER_CONTRACT.md](docs/ADAPTER_CONTRACT.md)。
 
+> **第一次看这个仓库？** 先读 [术语与代号速查 docs/GLOSSARY.md](docs/GLOSSARY.md) —— 一页讲清 mock⇄real、nav2_loopback_sim、拓扑代号、系统分层等反复出现的名词，读别的文档时回来查即可。
+
 **Phase B（已跑通）**：换一个 adapter，把这套**同一个 LangGraph 编排图**接到**真实 ROS 2 Nav2**（Jazzy + nav2_loopback_sim，容器内），编排代码一行未改。故障用 keepout 代价地图滤镜注入，恢复由确定性内核查表——mock ⇄ 真实 Nav2 可换，是在真机栈上核对通过的事实。全过程实测与复现见 [phase_b/FINDINGS.md](phase_b/FINDINGS.md)。
 
 ![Day-4 真实集成 POV 节选：同一编排图驱动真实 Nav2，a3 被 keepout 判不可达 → 确定性恢复替换 a3_alt](docs/recording/day4_demo.gif)
@@ -20,6 +22,7 @@
 
 | 内容 | 位置 |
 |---|---|
+| **术语与代号速查(新读者先读)** | [docs/GLOSSARY.md](docs/GLOSSARY.md) |
 | 约 4 分钟演示录屏，含中英字幕 | [docs/recording/demo.mp4](docs/recording/demo.mp4) + [demo.srt](docs/recording/demo.srt) |
 | Godot 4 POV 渲染管线，由地面真值轨迹驱动 | [povgen/](povgen/) + [scripts/export_traj.py](scripts/export_traj.py) |
 | 本地 VLM 巡检帧标注实验与局限记录 | [scripts/vlm_annotate.py](scripts/vlm_annotate.py) -> [标注帧](docs/screenshots/vlm_live_annotated.png) |
