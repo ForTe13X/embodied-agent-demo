@@ -116,6 +116,10 @@ const FEED_TYPES = new Set(["run_start","plan_built","fault_armed","fault_activa
   "circuit_open","token_consumed","finding_reported","step_skipped","violation","run_summary","attempt"]);
 const CLS = {fault_injector:"injector", safety_monitor:"safety", exception_manager:"exc",
   replanner:"replan", hitl:"hitl", reporter:"done"};
+// 高信号事件按【事件语义】上色,优先于 actor——registry/observer 这些 actor 会同时发普通与安全
+// 事件,只按 actor 上色会让"🛡拦截""发现异常""熔断"这类拿不到高亮(post-merge 审计)
+const EVENT_CLS = {guardrail_rejection:"safety", circuit_open:"exc",
+  watchdog_triggered:"exc", finding_reported:"done"};
 
 // ---- 人话映射(默认给外行观众看;技术观众可勾"原始日志"看裸事件)----
 const EVENT_LABELS = {
@@ -156,7 +160,8 @@ function humanDetail(e) {                              // 事件细节转人话(
   if (e.event_type === "recovery_applied" && p.action) {
     const t = p.action.type;
     return t === "retry" ? ":重试" : t === "avoid_edge" ? ":绕开被堵路段"
-      : t === "substitute" ? ":改用备用点" : t === "skip_step" ? ":跳过该步" : ":" + t;
+      : t === "substitute" ? ":改用备用点" : t === "skip_step" ? ":跳过该步"
+      : t === "dock_resume" ? ":回坞充电后续跑" : ":" + t;
   }
   if (p.node) return ":" + nm(p.node);
   if (p.target) return "→" + nm(p.target);
@@ -166,7 +171,7 @@ function humanDetail(e) {                              // 事件细节转人话(
 
 let events = [], maxTick = 0, cur = 0, playing = false, lastFrame = 0;
 // 派生索引
-let entries = [], blockedAt = [], violationsAt = [], batteryAt = [], anomalyNode = null;
+let entries = [], blockedAt = [], violationsAt = [], batteryAt = [];
 
 const $ = id => document.getElementById(id);
 const cv = $("topo-canvas"), ctx = cv.getContext("2d");
@@ -319,7 +324,7 @@ function render() {
   const body = $("feed-body");
   body.innerHTML = events.filter(e => e.tick <= cur && FEED_TYPES.has(e.event_type))
     .map(e => {
-      const cls = CLS[e.actor] || "";
+      const cls = EVENT_CLS[e.event_type] || CLS[e.actor] || "";
       if (raw) {   // 技术观众:裸事件(actor + event_type + JSON payload)——全部转义
         const p = JSON.stringify(e.payload);
         const pt = p.length > 110 ? p.slice(0, 110) + "…" : p;
