@@ -1,7 +1,7 @@
 # 评测结果(自动生成,请勿手改)
 
 - adapter: **mock**(此 90-run 预注册评测为仿真 mock server)；真实 Nav2 的缩减评测(mock⇄real 对比)见 [phase_c/PHASE_C_RESULTS.md](phase_c/PHASE_C_RESULTS.md)
-- 代码 commit: `669ebd6-dirty`;预注册 `prereg.yaml` commit: `97f24ed`
+- 代码 commit: `3e28590`;预注册 `prereg.yaml` commit: `97f24ed`
 - seeds: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9](固定,禁止 seed-shopping)
 - 指标由 `metrics.py` 只读 `runs/**.jsonl` 事件日志计算,不读 agent 内存
 
