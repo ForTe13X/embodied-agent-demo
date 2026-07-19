@@ -260,7 +260,8 @@ class ToolRegistry:
                 restricted_ok_nodes=({p.node_id} if self._nav_zone_auth
                                      else frozenset()),
                 allow_all_restricted=not self.gates_on,
-                allow_forbidden_target=not self.gates_on)
+                allow_forbidden_target=not self.gates_on,
+                geofence_on=self.gates_on)   # F-01:运行期围栏随门禁总开关;消融关闭以如实测违规
             if "error" in res:
                 raise ToolError("NAV_BUSY", res["error"])
             return {"goal_id": res["goal_id"]}

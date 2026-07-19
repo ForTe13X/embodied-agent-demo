@@ -36,6 +36,8 @@ from geometry_msgs.msg import PoseStamped
 from nav2_simple_commander.robot_navigator import BasicNavigator, TaskResult
 from tf2_ros import Buffer, TransformListener
 
+from embodied_agent.geofence import TransitGuard  # 与 mock 共用同一套 transit 判定(F-01)
+
 _VEL_PAT = re.compile(r"(cmd_vel|/velocity|/torque|/effort|joint_trajectory)", re.I)
 _WP_PAT = re.compile(r"^\s*(\w+):\s*\{x:\s*([-\d.]+),\s*y:\s*([-\d.]+),\s*yaw:\s*([-\d.]+)")
 _NODE_PAT = re.compile(
@@ -99,6 +101,10 @@ class RclpyAdapter:
         self._g: dict[str, dict] = {}           # goal_id -> 运行态记录
         self._cur: Optional[str] = None         # _cur_node 滞回缓存
         self._start_node: Optional[str] = None
+        # F-01 运行期访问围栏:盯 _cur_node() 的实际位置流,踏入未授权受限/禁入区即安全停。
+        # 真实 Nav2 在 costmap 上规划(r1 非 keepout),故轨迹可能穿过 r1——目标被门禁、轨迹没有;
+        # 这一层不依赖规划器是否 access-aware,直接盯实际位置强制。
+        self.guard = TransitGuard(lambda n: self.nodes[n]["access"])
 
     # ---- 结构性保证:无速度接口 -----------------------------------------
     def assert_no_velocity_interface(self) -> list[str]:
@@ -126,7 +132,8 @@ class RclpyAdapter:
                         avoid_edges: set = frozenset(),
                         restricted_ok_nodes: set = frozenset(),
                         allow_all_restricted: bool = False,
-                        allow_forbidden_target: bool = False) -> dict:
+                        allow_forbidden_target: bool = False,
+                        geofence_on: bool = True) -> dict:
         # 注:avoid_edges/restricted_ok_nodes/allow_* 保留以与 Protocol 同签名。Phase B 里
         # 受阻边/隔离节点故障靠 keepout 掩码在 send_goal 前改(Day-3 接入);这些参数当前仅用于
         # 【进度路线的 access 感知计算】,不改变底盘是否发目标(门禁归注册表,与 mock server 一致)。
@@ -167,7 +174,11 @@ class RclpyAdapter:
                             "t0": time.time(), "finish_t": None, "start": start,
                             "route": planned, "max_edge_idx": 0,
                             "last_dist": None, "stall": 0, "last_pose": None,
-                            "last_t": time.time()}
+                            "last_t": time.time(),
+                            # F-01 围栏上下文:已授权受限区 + 围栏开关(消融/gates_off 关)
+                            "authorized_zones": frozenset(restricted_ok_nodes),
+                            "geofence_on": geofence_on,
+                            "_geo_last": None}
         return {"goal_id": goal_id}
 
     async def feedback(self, goal_id: str) -> Optional[dict]:
@@ -182,6 +193,23 @@ class RclpyAdapter:
 
         fb = self.nav.getFeedback()
         cur = self._cur_node()
+        # F-01 运行期围栏:实际位置踏入未授权受限/禁入区 → 立即取消 Nav2 目标、安全停,
+        # 终态上浮 transit_violation(编排层据此走异常处理)。只在位置变化时判一次。
+        if cur is not None and cur != g["_geo_last"]:
+            g["_geo_last"] = cur
+            v = self.guard.check(cur, authorized_zones=g["authorized_zones"],
+                                 enabled=g["geofence_on"])
+            if v is not None:
+                try:
+                    self.nav.cancelTask()
+                except Exception:
+                    pass
+                g["terminal"] = "aborted"
+                g["reason"] = f"transit_violation:{v.kind}:{cur}"
+                g["finish_t"] = time.time()
+                if self._active == goal_id:
+                    self._active = None
+                return self._terminal_fb(goal_id, g)
         route = g["route"]
         edges_total = max(1, len(route) - 1)
         idx = route.index(cur) if cur in route else g["max_edge_idx"]

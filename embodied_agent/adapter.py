@@ -24,7 +24,8 @@ class RobotAdapter(Protocol):
                         avoid_edges: set = frozenset(),
                         restricted_ok_nodes: set = frozenset(),
                         allow_all_restricted: bool = False,
-                        allow_forbidden_target: bool = False) -> dict: ...
+                        allow_forbidden_target: bool = False,
+                        geofence_on: bool = True) -> dict: ...
     async def feedback(self, goal_id: str) -> Optional[dict]: ...
     async def result(self, goal_id: str) -> Optional[dict]: ...
     async def cancel(self, goal_id: str) -> bool: ...
@@ -55,12 +56,14 @@ class MockAdapter:
                         avoid_edges: set = frozenset(),
                         restricted_ok_nodes: set = frozenset(),
                         allow_all_restricted: bool = False,
-                        allow_forbidden_target: bool = False) -> dict:
+                        allow_forbidden_target: bool = False,
+                        geofence_on: bool = True) -> dict:
         return self.server.send_goal(
             target, authorized=authorized, avoid_edges=avoid_edges,
             restricted_ok_nodes=restricted_ok_nodes,
             allow_all_restricted=allow_all_restricted,
-            allow_forbidden_target=allow_forbidden_target)
+            allow_forbidden_target=allow_forbidden_target,
+            geofence_on=geofence_on)
 
     async def feedback(self, goal_id: str) -> Optional[dict]:
         return self.server.feedback(goal_id)
