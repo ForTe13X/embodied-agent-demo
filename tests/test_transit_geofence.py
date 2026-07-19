@@ -116,3 +116,43 @@ def test_geofence_off_under_ablation_lets_transit_through_for_measurement():
     # 地面真值 SafetyMonitor 仍如实记录 r1 的未授权进入(测量不受围栏影响)
     assert any(v["kind"] == "unauthorized_zone_entry" and v["node"] == "r1"
                for v in rt.safety.violations)
+
+
+# ---- 3. 不变式锁 + 采样行为固化(安全审查) --------------------------------
+
+def test_registry_never_couples_allow_all_restricted_with_geofence_on():
+    """不变式:注册表任何 send_goal 都不得同时 allow_all_restricted=True 且 geofence_on=True
+    (否则路由放行未授权 r1 而围栏又开着——把'路由准入'和'围栏授权'解耦会开出绕过窗口)。
+    且 geofence_on 恒等于 gates_on。防未来重构把这对锁拆开(安全审查 bypass 维度建议)。"""
+    from embodied_agent.runtime import build_runtime as _bld
+
+    for gates_on in (True, False):
+        rt = _bld(RunConfig(condition="test", seed=0, fault_specs=[], gates_on=gates_on))
+        captured = []
+        orig = rt.adapter.send_goal
+
+        async def spy(target, _orig=orig, **kw):
+            captured.append(kw)
+            return await _orig(target, **kw)
+
+        rt.adapter.send_goal = spy
+
+        async def go():
+            await rt.registry.call("navigate_to", {"node_id": "a1"})
+            await rt.registry.call("return_to_dock", {})
+
+        asyncio.run(go())
+        assert captured, "应至少捕获一次 send_goal"
+        for kw in captured:
+            assert not (kw.get("allow_all_restricted") and kw.get("geofence_on")), \
+                f"gates_on={gates_on}: 危险组合 allow_all_restricted+geofence_on {kw}"
+            assert kw.get("geofence_on") == gates_on, \
+                f"geofence_on 应恒等于 gates_on={gates_on}: {kw}"
+
+
+def test_single_unauthorized_sample_stops_immediately_documented_behavior():
+    """固化当前行为:mock/纯逻辑层单次未授权采样即判违规(dwell=1,踏入即停)。
+    真实 adapter 可用 geo_dwell_samples 提高受限区 dwell;此断言标注'单采样即停'为已知默认行为。"""
+    g = TransitGuard(TOPO.access)
+    assert g.check("r1", authorized_zones=frozenset()) is not None   # 单采样即违规(无 dwell 概念)
+    assert g.check("f1", authorized_zones=frozenset()) is not None

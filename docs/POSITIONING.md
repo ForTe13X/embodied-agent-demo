@@ -37,8 +37,12 @@ learned skill(如 VLA)  图像 + 指令 + 本体状态 → 连续动作序列(ac
    —— `TransitGuard` 盯机器人**实际所在节点**的位置流,一旦踏入禁入区或未授权受限区即判 transit
    违规,控制环随即取消目标、安全停,并把 `transit_violation` 终态上浮编排层。它接进真实
    `RclpyAdapter.feedback`(盯 `_cur_node()`)与 mock server 两条控制环,不依赖规划器是否 access-aware。
-   这是**强制/检测**层;彻底**预防**(轨迹根本不进 `r1`)仍需把访问级下推进 costmap keepout(§5 路线图)。
-   围栏在消融(gates_off)下关闭,故地面真值 SafetyMonitor 仍能如实测未拦截时的违规。
+   **验证范围(诚实标注)**:mock 端到端 + 纯逻辑单测已覆盖;真实 `RclpyAdapter` 为同源接入,但带围栏的
+   真实 Nav2 端到端复验**需容器**(见 [`phase_b/smoke_transit_guard.py`](../phase_b/smoke_transit_guard.py)),
+   本轮未在真实栈跑过。这是**强制/检测**层;彻底**预防**(轨迹根本不进 `r1`)仍需把访问级下推进 costmap
+   keepout(§5 路线图)。**两个方向都不精确**:喂围栏的是 `_cur_node()` 最近邻+滞回标签,快速穿越可能
+   *欠检*、掠过受限 waypoint 可能*误停*——安全优先于可用性,受限区违规可用 `geo_dwell_samples` 调 dwell,
+   禁入区始终单采样即停。围栏在消融(gates_off)下关闭,故地面真值 SafetyMonitor 仍能如实测未拦截时的违规。
    注:loopback 真实 runtime 的 battery/sensor 型 SafetyMonitor 仍为 mock-only;transit 围栏是**独立**
    于它的、adapter 内置的强制层。
 3. **上层能处理底层解决不了的任务语义问题。** Nav2 判 `a3` 不可达 → 编排层查预注册表替换

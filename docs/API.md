@@ -120,7 +120,7 @@ Phase B 止损线见 [ADAPTER_CONTRACT.md](ADAPTER_CONTRACT.md)。
 - actor ∈ planner/executor/observer/exception_manager/replanner/reporter/registry/server/safety_monitor/safety_runtime/hitl/fault_injector/harness/malicious_planner;
 - 违规、节点进入、目标启动由 `safety_monitor`(注册表之下)独立记录——指标不读 agent 自报;
 - **`safety_runtime` / `transit_guard_stop`(F-01 运行期访问围栏)**:机器人实际位置踏入未授权受限/
-  禁入区时发射(`payload{node,kind,access}`,kind ∈ `unauthorized_restricted_transit`/`forbidden_transit`),
+  禁入区时发射(`payload{goal_id,node,kind,access}`,kind ∈ `unauthorized_restricted_transit`/`forbidden_transit`),
   控制环随即取消目标、终态 `aborted` 且 `reason` 前缀 `transit_violation:`。门禁开时 `world.route()` 本就
   不排未授权 transit 节点,故此事件在正常评测里不出现;它守的是真实 Nav2 那种 access-盲规划器(见
   [POSITIONING.md §2](POSITIONING.md))。消融(gates_off)下围栏关闭。

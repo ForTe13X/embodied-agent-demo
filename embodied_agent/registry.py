@@ -314,7 +314,9 @@ class ToolRegistry:
             return {"report_id": f"report-{p.image_id}"}
 
         async def return_to_dock(p: EmptyIn) -> dict:
-            res = await a.send_goal(DOCK, authorized=True)
+            # geofence_on 随门禁总开关,与 navigate_to 一致(dock 恒 free 故不会触发,
+            # 显式传值消除"依赖回坞路径无受限节点"的隐性前提;安全审查)
+            res = await a.send_goal(DOCK, authorized=True, geofence_on=self.gates_on)
             if "error" in res:
                 raise ToolError("NAV_BUSY", res["error"])
             return {"goal_id": res["goal_id"]}
