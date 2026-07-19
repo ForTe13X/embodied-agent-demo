@@ -143,6 +143,11 @@ const COND_LABELS = {
   compound:"复合故障(受阻+低电量)", adversarial:"对抗攻击:门禁开,全拦截",
 };
 const nm = id => (NODES[id] ? NODES[id].name : id);   // 节点代号→中文名
+// HTML 转义:事件日志字段(mission / HITL message / finding label / payload)可控,
+// 经 innerHTML 渲染前必须转义,否则日志内容会被当 HTML 执行(codex 评审 F-16)。
+const esc = s => String(s).replace(/[&<>"']/g, c =>
+  ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
 function humanDetail(e) {                              // 事件细节转人话(用中文节点名)
   const p = e.payload || {};
   if (Array.isArray(p.route) && p.route.length) return ":" + p.route.map(nm).join("→");
@@ -169,7 +174,7 @@ async function loadRuns() {
   const runs = await (await fetch("/api/runs")).json();
   const sel = $("run-select");
   sel.innerHTML = runs.map(r =>
-    `<option value="${r.condition}:${r.seed}">${COND_LABELS[r.condition] || r.condition} · 第${r.seed + 1}次</option>`).join("");
+    `<option value="${esc(r.condition)}:${r.seed}">${COND_LABELS[r.condition] || esc(r.condition)} · 第${r.seed + 1}次</option>`).join("");
   // 默认选正面的"故障→自动改道"场景,而非字母序排第一的 gates-off 消融(codex F-02)
   for (const pref of ["nav_blocked:0", "nav_unreachable:0", "baseline:0"]) {
     if ([...sel.options].some(o => o.value === pref)) { sel.value = pref; break; }
@@ -308,14 +313,15 @@ function render() {
   body.innerHTML = events.filter(e => e.tick <= cur && FEED_TYPES.has(e.event_type))
     .map(e => {
       const cls = CLS[e.actor] || "";
-      if (raw) {   // 技术观众:裸事件(actor + event_type + JSON payload)
+      if (raw) {   // 技术观众:裸事件(actor + event_type + JSON payload)——全部转义
         const p = JSON.stringify(e.payload);
+        const pt = p.length > 110 ? p.slice(0, 110) + "…" : p;
         return `<div class="ev ${cls}"><span class="t">t=${String(e.tick).padStart(3)}</span> ` +
-               `<b>${e.actor}</b> ${e.event_type} ${p.length > 110 ? p.slice(0, 110) + "…" : p}</div>`;
+               `<b>${esc(e.actor)}</b> ${esc(e.event_type)} ${esc(pt)}</div>`;
       }
-      const label = EVENT_LABELS[e.event_type] || e.event_type;   // 外行观众:人话
+      const label = EVENT_LABELS[e.event_type] || esc(e.event_type);   // 外行观众:人话(EVENT_LABELS 静态安全;fallback 转义)
       return `<div class="ev ${cls}"><span class="t">第${String(e.tick).padStart(3)}步</span> ` +
-             `${label}${humanDetail(e)}</div>`;
+             `${label}${esc(humanDetail(e))}</div>`;
     }).join("");
   body.scrollTop = body.scrollHeight;
 }

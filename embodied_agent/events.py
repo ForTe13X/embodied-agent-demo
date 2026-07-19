@@ -3,6 +3,11 @@
 每条事件:{seq, tick, run_id, condition, seed, actor, event_type, payload}。
 不写墙钟时间,保证同 seed 事件流逐字节可复现(含跨平台:换行固定 LF);
 指标由独立脚本只读日志计算,不读 agent 内存。
+
+**"append-only" 的精确含义(codex 评审 F-15)**:指【单个 run 内】事件按 seq 顺序追加、只增不改;
+文件以 `"w"` 打开,**同 seed 重跑会覆盖同名文件**——不可篡改性来自 git 历史(`runs/` 入库)
++ 预注册协议(`run_eval` 要求工作树干净),而非文件模式本身。跨 run 的哈希链 / manifest / rerun ID
+是未来项,不宣称为已有的审计强担保。
 """
 from __future__ import annotations
 

@@ -38,17 +38,41 @@ def _free_nodes(topo: TopoMap) -> list[str]:
     return [n.id for n in topo.nodes.values() if n.access == "free" and n.id != "dock"]
 
 
+def _coerce_bool(v, default: bool) -> bool:
+    if isinstance(v, bool):
+        return v
+    if isinstance(v, (int, float)):
+        return bool(v)
+    if isinstance(v, str):                       # "false"/"0"/"no" 都不能被 bool() 当成 True
+        return v.strip().lower() not in ("false", "0", "no", "off", "")
+    return default
+
+
+def _coerce_float(v, default: float) -> float:
+    try:
+        return float(v)
+    except (TypeError, ValueError):              # None / "not-a-number" → 退回默认,不崩
+        return default
+
+
 def _validate(raw: dict, text: str, topo: TopoMap) -> Intent | None:
-    """白名单式后校验:不信任模型输出,逐字段验证。"""
-    nodes = [n for n in raw.get("patrol_nodes", [])
+    """白名单式后校验:不信任模型输出,逐字段【类型防御】验证——合法 JSON 但字段类型不对
+    (patrol_nodes=null、battery_floor_pct="x"、report_anomalies="false")不再崩,退回 None
+    → 上层走规则兜底(codex 评审 F-13)。"""
+    if not isinstance(raw, dict):
+        return None
+    pn = raw.get("patrol_nodes")
+    if not isinstance(pn, list):                 # null / 非列表 → 视作空,交给下面的 not nodes 兜底
+        pn = []
+    nodes = [n for n in pn
              if isinstance(n, str) and topo.has(n) and topo.access(n) == "free"
              and n != "dock"]
     if not nodes:
         return None
     return Intent(
         mission=text, patrol_nodes=nodes,
-        report_anomalies=bool(raw.get("report_anomalies", True)),
-        battery_floor_pct=float(raw.get("battery_floor_pct", 20) or 20),
+        report_anomalies=_coerce_bool(raw.get("report_anomalies"), True),
+        battery_floor_pct=_coerce_float(raw.get("battery_floor_pct"), 20.0),
     )
 
 
