@@ -12,6 +12,7 @@ Provider 链(local-first,LLM 永不承重):
 from __future__ import annotations
 
 import json
+import math
 import os
 import re
 import urllib.error
@@ -50,9 +51,11 @@ def _coerce_bool(v, default: bool) -> bool:
 
 def _coerce_float(v, default: float) -> float:
     try:
-        return float(v)
+        f = float(v)
     except (TypeError, ValueError):              # None / "not-a-number" → 退回默认,不崩
         return default
+    # 拒绝 NaN/inf:否则 "NaN" 会被当电量阈值,破坏"红线只能收紧"的不变量(codex 复核 PR#10)
+    return f if math.isfinite(f) else default
 
 
 def _validate(raw: dict, text: str, topo: TopoMap) -> Intent | None:

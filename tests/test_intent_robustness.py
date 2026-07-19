@@ -57,3 +57,16 @@ def test_validate_string_false_is_false():
 def test_validate_raw_not_dict_returns_none():
     assert _validate([], "x", TOPO) is None
     assert _validate(None, "x", TOPO) is None
+
+
+def test_validate_nan_battery_floor_rejected():
+    # "NaN"/inf 不能当电量阈值(否则破坏"红线只能收紧"不变量;codex 复核 PR#10)
+    for bad in ("NaN", "inf", float("nan"), float("inf")):
+        intent = _validate({"patrol_nodes": ["a1"], "battery_floor_pct": bad}, "x", TOPO)
+        assert intent is not None and intent.battery_floor_pct == 20.0
+
+
+def test_rule_parse_underscore_suffix_not_grabbed_as_node():
+    # "a1_extra" 不应被当成节点 a1(下划线边界;codex 复核 PR#10)
+    intent = rule_parse("去 a1_extra 巡检", TOPO)
+    assert intent.patrol_nodes == ["a1", "a2", "a3"]   # 无有效显式节点 → 巡检默认

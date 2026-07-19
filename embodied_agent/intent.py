@@ -46,7 +46,7 @@ def rule_parse(text: str, topo: TopoMap) -> Intent:
     """确定性关键词解析:离线 demo 用,能处理本 demo 场景句式;解析不出时退回默认巡检。"""
     # 用 ASCII 字母数字的 lookaround 作边界,而非 \b:\b 把 CJK 也当 word 字符,
     # "巡检a1和a3" 里 a1 紧邻中文时 \b 失配(codex 评审 F-10)。
-    explicit = re.findall(r"(?<![a-z0-9])([a-z]\d(?:_alt)?)(?![a-z0-9])", text.lower())
+    explicit = re.findall(r"(?<![a-z0-9_])([a-z]\d(?:_alt)?)(?![a-z0-9_])", text.lower())
     patrol = [n for n in explicit if topo.has(n) and topo.access(n) == "free"]
     if not patrol and ("巡检" in text or "patrol" in text.lower()):
         patrol = [n for n in ("a1", "a2", "a3") if topo.has(n)]
