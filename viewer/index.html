@@ -132,8 +132,9 @@ const EVENT_LABELS = {
 const OUTCOME_LABELS = {
   completed_full:"完整完成 ✓", completed:"完成 ✓",
   degraded_complete:"已完成(主路不通→改用备用点,安全归坞)✓",
-  adversarial_script_done:"越权请求已被拦截,安全 ✓",
+  adversarial_script_done:"越权请求已被拦截,安全 ✓", adversarial:"越权请求已被拦截,安全 ✓",
   safe_abort:"安全放弃(未耗电、未越界)", battery_dead:"电量耗尽,未完成 ✗",
+  unsafe_failure:"未安全完成 ✗",   // 有违规 / 未归坞 / 崩溃 —— 权威分类(与评测同口径)
 };
 const COND_LABELS = {
   baseline:"正常巡检(无故障)", nav_blocked:"走廊被封:自动绕道",
@@ -143,6 +144,11 @@ const COND_LABELS = {
   compound:"复合故障(受阻+低电量)", adversarial:"对抗攻击:门禁开,全拦截",
 };
 const nm = id => (NODES[id] ? NODES[id].name : id);   // 节点代号→中文名
+// HTML 转义:事件日志字段(mission / HITL message / finding label / payload)可控,
+// 经 innerHTML 渲染前必须转义,否则日志内容会被当 HTML 执行(codex 评审 F-16)。
+const esc = s => String(s).replace(/[&<>"']/g, c =>
+  ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
 function humanDetail(e) {                              // 事件细节转人话(用中文节点名)
   const p = e.payload || {};
   if (Array.isArray(p.route) && p.route.length) return ":" + p.route.map(nm).join("→");
@@ -169,7 +175,11 @@ async function loadRuns() {
   const runs = await (await fetch("/api/runs")).json();
   const sel = $("run-select");
   sel.innerHTML = runs.map(r =>
-    `<option value="${r.condition}:${r.seed}">${COND_LABELS[r.condition] || r.condition} · 第${r.seed + 1}次</option>`).join("");
+    `<option value="${esc(r.condition)}:${r.seed}">${COND_LABELS[r.condition] || esc(r.condition)} · 第${r.seed + 1}次</option>`).join("");
+  // 默认选正面的"故障→自动改道"场景,而非字母序排第一的 gates-off 消融(codex F-02)
+  for (const pref of ["nav_blocked:0", "nav_unreachable:0", "baseline:0"]) {
+    if ([...sel.options].some(o => o.value === pref)) { sel.value = pref; break; }
+  }
 }
 
 async function loadLog() {
@@ -188,9 +198,20 @@ async function loadLog() {
     .map(e => ({tick:e.tick, pct:e.payload.battery_pct}));
   const init = events.find(e => e.event_type === "fault_activated" && e.payload.initial_battery_pct);
   if (init) batteryAt.unshift({tick:0, pct:init.payload.initial_battery_pct});
+  // 权威终态:向后端要 normalized_outcome(与 90-run 评测同一分类口径),避免只读 outcome_hint
+  // 让 degraded_complete / safe_abort / 有违规的 run 被误显示成普通"完成"(codex 复核 PR#10)。
+  let normalized = null, sviol = null;
+  try {
+    const s = await (await fetch(`/api/summary?condition=${cond}&seed=${seed}`)).json();
+    if (s && s.normalized_outcome) { normalized = s.normalized_outcome; sviol = s.violations; }
+  } catch (e) { /* 拿不到就回退到事件推断 */ }
   const summary = events.find(e => e.event_type === "run_summary");
   const hint = summary ? (summary.payload.outcome_hint || "completed") : "crashed";
-  $("outcome-label").textContent = OUTCOME_LABELS[hint] || (hint === "crashed" ? "未完成 / 异常中止 ✗" : hint);
+  const nViol = (sviol != null ? sviol : violationsAt.length);
+  $("outcome-label").textContent =
+    (normalized && OUTCOME_LABELS[normalized]) ? OUTCOME_LABELS[normalized]
+      : (nViol > 0 ? `越界未拦截,不安全 ✗(${nViol} 次违规)`
+        : (OUTCOME_LABELS[hint] || (hint === "crashed" ? "未完成 / 异常中止 ✗" : hint)));
   $("tick-slider").max = maxTick; $("tick-max").textContent = maxTick;
   cur = 0; playing = false; $("play-btn").textContent = "▶ 播放";
   // POV 同步面板:存在对应渲染视频则并入三视图布局(fpt=5 → t_video=(tick+1)/6)
@@ -299,14 +320,15 @@ function render() {
   body.innerHTML = events.filter(e => e.tick <= cur && FEED_TYPES.has(e.event_type))
     .map(e => {
       const cls = CLS[e.actor] || "";
-      if (raw) {   // 技术观众:裸事件(actor + event_type + JSON payload)
+      if (raw) {   // 技术观众:裸事件(actor + event_type + JSON payload)——全部转义
         const p = JSON.stringify(e.payload);
+        const pt = p.length > 110 ? p.slice(0, 110) + "…" : p;
         return `<div class="ev ${cls}"><span class="t">t=${String(e.tick).padStart(3)}</span> ` +
-               `<b>${e.actor}</b> ${e.event_type} ${p.length > 110 ? p.slice(0, 110) + "…" : p}</div>`;
+               `<b>${esc(e.actor)}</b> ${esc(e.event_type)} ${esc(pt)}</div>`;
       }
-      const label = EVENT_LABELS[e.event_type] || e.event_type;   // 外行观众:人话
+      const label = EVENT_LABELS[e.event_type] || esc(e.event_type);   // 外行观众:人话(EVENT_LABELS 静态安全;fallback 转义)
       return `<div class="ev ${cls}"><span class="t">第${String(e.tick).padStart(3)}步</span> ` +
-             `${label}${humanDetail(e)}</div>`;
+             `${label}${esc(humanDetail(e))}</div>`;
     }).join("");
   body.scrollTop = body.scrollHeight;
 }

@@ -27,8 +27,16 @@ learned skill(如 VLA)  图像 + 指令 + 本体状态 → 连续动作序列(ac
 
 1. **任务级编排与底盘执行可解耦。** 同一套 LangGraph 编排图,从 mock adapter 切到真实
    ROS 2 / Nav2 软件栈,编排代码一行未改(Phase B)。
-2. **安全门禁位于 adapter 之上、独立于底盘。** 未知工具 / 越拓扑 / 禁入区 / 受限区无 token
-   等请求,换到真实 Nav2 后仍被 Tool Registry 拦截(Phase C gate_check:5/5 拦截)。
+2. **目标级安全门禁位于 adapter 之上、独立于底盘。** 未知工具 / 越拓扑 / 禁入区 / 受限区无
+   token 等请求(针对**目标节点**的 access),换到真实 Nav2 后仍被 Tool Registry 拦截
+   (Phase C gate_check:5/5 拦截)。**诚实边界(codex 评审 F-01,已采纳)**:门禁只约束
+   **目标**的 access,不约束**过境路径**;真实 Nav2 走几何 costmap,去自由目标的路线会经过
+   受限区 `r1` 附近——nav_blocked 里机器人的**最近-waypoint 标签**连续 13 采样落在 `r1`
+   (`pose=="r1"`)。**措辞精确性(codex 复核 PR#10)**:这是 TF→最近航点 + 滞回得到的标签,
+   是**强风险信号**,不是 polygon geofence 的入侵证明(当前无几何围栏判定);且真实 runtime 把
+   SafetyMonitor 设为 `None`,所以既没几何判定、也没记账——mock 侧"违规非自评"的地面真值担保
+   在真实栈上**缺失**。这是过境访问的监视缺口,不是目标门禁的漏洞;补法(真实侧 transit 监视器
+   + polygon 判定 / 把 r1 也涂进 keepout)见 §5 路线图与 [RECOVERY_OWNERSHIP.md](RECOVERY_OWNERSHIP.md)。
 3. **上层能处理底层解决不了的任务语义问题。** Nav2 判 `a3` 不可达 → 编排层查预注册表替换
    `a3_alt`;而普通路径受阻被 Nav2 自身 BT 消化(见 [RECOVERY_OWNERSHIP.md](RECOVERY_OWNERSHIP.md))。
 

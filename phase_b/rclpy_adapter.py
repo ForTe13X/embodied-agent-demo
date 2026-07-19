@@ -152,7 +152,9 @@ class RclpyAdapter:
         x, y, yaw = self.wp[target]
         goal = self._pose(x, y)
         goal.header.stamp = self.nav.get_clock().now().to_msg()
-        accepted = self.nav.goToPose(goal)   # 立即返回,不阻塞
+        # 注:BasicNavigator.goToPose 内部 spin 到 goal 被接受才返回——会短暂阻塞事件循环
+        # (async 只是名义签名;真正的原生 async action future 是未来项)。codex 评审 F-05。
+        accepted = self.nav.goToPose(goal)
         if not accepted:
             now = time.time()
             self._g[goal_id] = {"target": target, "terminal": "aborted",

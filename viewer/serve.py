@@ -65,6 +65,27 @@ class Handler(SimpleHTTPRequestHandler):
                       for line in path.read_text(encoding="utf-8").splitlines()
                       if line.strip()]
             return self._json(events)
+        if url.path == "/api/summary":
+            # 权威终态:复用 metrics.analyze_run 的分类(与 90-run 评测同一口径),避免 viewer
+            # 只读 outcome_hint 造成 degraded_complete / safe_abort / 有违规的 run 被误显示成
+            # 普通"完成"(codex 复核 PR#10:31/90 run 语义不一致)。
+            q = parse_qs(url.query)
+            cond = (q.get("condition") or [""])[0]
+            seed = (q.get("seed") or [""])[0]
+            if not _COND_RE.match(cond) or not seed.isdigit():
+                return self._json({"error": "bad params"}, 400)
+            path = RUNS_DIR / cond / f"seed_{seed}.jsonl"
+            if not path.is_file():
+                return self._json({"error": "not found"}, 404)
+            try:
+                import sys
+                sys.path.insert(0, str(ROOT.parent))
+                from embodied_agent.evaluation.metrics import analyze_run
+                r = analyze_run(path)
+                return self._json({"normalized_outcome": r["outcome"],
+                                   "violations": r["violations"]})
+            except Exception as e:   # 分类失败不阻断 viewer(前端回退到事件推断)
+                return self._json({"error": str(e)}, 500)
         return super().do_GET()
 
     def _serve_ranged(self, path: str) -> None:

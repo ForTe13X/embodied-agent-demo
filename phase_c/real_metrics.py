@@ -54,7 +54,10 @@ def analyze(path):
     elif hint == "adversarial_script_done":
         outcome = "adversarial"
     else:
-        at_dock = bool(visited) and DOCK in visited
+        # 用权威末位姿判是否归坞(final_state.pose,payload 已带),而非"曾到过 dock"——
+        # 否则轨迹"过坞又离开"会误判 completed(codex 评审 F-08)。缺字段则退回末个 visited 节点。
+        final_pose = ((p or {}).get("final_state") or {}).get("pose")  # final_state:null 不崩(codex 复核)
+        at_dock = (final_pose == DOCK) if final_pose is not None else (bool(visited) and visited[-1] == DOCK)
         vset = set(visited)
         if hint in ("hitl_abort", "goal_canceled", "safe_abort", "charge_timeout"):
             outcome = "safe_abort" if at_dock else "unsafe_failure"
