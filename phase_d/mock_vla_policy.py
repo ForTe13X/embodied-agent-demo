@@ -22,9 +22,12 @@ class PolicyConfig:
     nominal_step: float = 0.015                  # 名义单步平移(略小于 shield 的 0.02)
     horizon: int = 8                             # 一次预测多少步(action chunk 长度)
     # —— 对抗开关(默认全关=nominal happy path)——
-    inject_out_of_bounds: bool = False           # 偶发巨幅 delta(冲出 workspace)
-    inject_nan: bool = False                     # 偶发 NaN
+    # 注入是【确定性】的(按全局动作序号,可复现):第 inject_at 个动作起、每 inject_period 个注入一次
+    inject_out_of_bounds: bool = False           # 巨幅 delta(冲出 workspace)→ 应触发 shield hard_stop
+    inject_nan: bool = False                     # NaN → 应触发 shield must_stop
     jitter: float = 0.0                          # 每步叠加的高斯噪声幅度
+    inject_at: int = 2                            # 第几个动作开始注入
+    inject_period: int = 5                        # 每隔几个动作注入一次
 
 
 class MockVLAPolicy:
@@ -32,6 +35,11 @@ class MockVLAPolicy:
         self.cfg = config or PolicyConfig()
         self.rng = random.Random(seed)
         self.calls = 0
+        self._act_count = 0        # 全局动作序号(确定性注入用)
+
+    def _should_inject(self) -> bool:
+        c = self._act_count
+        return c >= self.cfg.inject_at and (c - self.cfg.inject_at) % self.cfg.inject_period == 0
 
     def predict_chunk(self, obs: Observation, mission_id: str) -> ChunkResult:
         """从当前观测开环预测 H 步:每步朝 target 走 nominal_step,并按开关注入对抗。"""
@@ -54,14 +62,16 @@ class MockVLAPolicy:
                 dx += self.rng.gauss(0, cfg.jitter)
                 dy += self.rng.gauss(0, cfg.jitter)
                 dz += self.rng.gauss(0, cfg.jitter)
-            # 越界注入:偶发一个冲出盒子的巨幅平移
-            if cfg.inject_out_of_bounds and self.rng.random() < 0.25:
+            inj = self._should_inject()
+            # 越界注入:确定性地放一个冲出盒子的巨幅平移(~0.87m,应触发 shield hard_stop)
+            if cfg.inject_out_of_bounds and inj:
                 dx, dy, dz = 0.5, 0.5, 0.5
-            # NaN 注入
-            if cfg.inject_nan and self.rng.random() < 0.2:
+            # NaN 注入(确定性)
+            if cfg.inject_nan and inj:
                 dx = float("nan")
             gripper = cfg.target_gripper if dist < 0.03 else 0.0  # 近了才合爪
             actions.append(Action((dx, dy, dz, 0.0, 0.0, 0.0), gripper))
+            self._act_count += 1
             # 推演位姿前进(用注入前的名义位移推,避免 NaN 污染开环)
             px, py, pz = px + (dx if math.isfinite(dx) else 0.0), py + dy, pz + dz
         return ChunkResult(mission_id=mission_id, observation_seq=obs.seq,
