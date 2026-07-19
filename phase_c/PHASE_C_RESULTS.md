@@ -49,7 +49,7 @@ mock 的 N=10 预注册矩阵([RESULTS.md](../RESULTS.md))为主,后续可扩 N 
 - **nav_unreachable**:keepout 隔离 a3 → 真实 Nav2 的 `NavigateToPose` 返回不可达/规划失败 → 编排层按【预注册恢复表】确定性选择替代观测点 a3_alt(a3_alt 不是运行时由 LLM 临时生成)。底层故障机制变了(mock 底盘 vs 真实 Nav2 判不可达),但**上层编排恢复机制与终态与 mock 一致**。
 - **nav_blocked**:keepout 封 c2-a1 后目标仍可经他路到达。真实 Nav2 的重规划 BT 在 nav 层【自动改道】,未把该情况上浮为编排层故障,故检出/恢复=0/0——**0/0 不是失败**,是故障被 Nav2 内部 replan 消化。mock 底盘不自 replan,同类情况才由编排层执行 `avoid_edge`。
 - **gate_check**:恶意 planner 直接发起未授权注册表请求,验证 adapter 之上的门禁是否独立于底层 Nav2 生效:5/5 可移植门禁请求(未知工具/越拓扑 z9/禁入 f1/受限 r1 无 token/伪造 token)均被拦截、未产生本轮可观测的门禁绕过。原门禁清单另有 1 条电量红线,依赖 mock 电量模型;loopback 电量恒 100,故未计入。gate_check 真实 Nav2 不参与导航,故只跑 1 次确认门禁仍生效。
-  - **诚实边界(codex 评审 F-01,已采纳)**:此处证明的是**目标节点** access 的门禁(直接请求受限/禁入目标会被拦)。它**不**证明**过境路径**受约束——真实 Nav2 走几何 costmap,去自由目标 a2 的路线其**最近-waypoint 标签**连续 13 采样落在受限区 `r1`(`pose=="r1"`,无 token、无违规上报)。**措辞精确性(codex 复核 PR#10)**:这是 TF→最近航点 + 滞回的**标签**,是强风险信号、非 polygon geofence 入侵证明(当前无几何围栏);且真实 runtime 的 SafetyMonitor 目前为 `None`。补法见 [POSITIONING.md §2/§5](../docs/POSITIONING.md)。
+  - **诚实边界(codex 评审 F-01,已采纳)**:此处证明的是**目标节点** access 的门禁(直接请求受限/禁入目标会被拦)。它**不**证明**过境路径**受约束——真实 Nav2 走几何 costmap,去自由目标 a2 的路线其**最近-waypoint 标签**连续 13 采样落在受限区 `r1`(`pose=="r1"`,无 token、无违规上报)。这是 TF→最近航点 + 滞回的**标签**,是强风险信号、非 polygon geofence 入侵证明。**补法已实现(F-01 强制层)**:运行期访问围栏 [`geofence.py`](../embodied_agent/geofence.py) 接进 `RclpyAdapter.feedback`,盯 `_cur_node()` 位置流,踏入未授权 `r1` 即取消目标、上浮 `transit_violation`。**注意**:本轮表内 Phase C 数据是**加围栏前**所跑,故仍显示 `pose=="r1"` 过境;带围栏的真实栈复验需容器(见 [`smoke_transit_guard.py`](../phase_b/smoke_transit_guard.py))。判定逻辑与 mock 强制路径已在宿主 venv 单测(`tests/test_transit_geofence.py`)。
 
 ## 结论
 

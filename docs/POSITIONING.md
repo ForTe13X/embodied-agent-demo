@@ -29,14 +29,18 @@ learned skill(如 VLA)  图像 + 指令 + 本体状态 → 连续动作序列(ac
    ROS 2 / Nav2 软件栈,编排代码一行未改(Phase B)。
 2. **目标级安全门禁位于 adapter 之上、独立于底盘。** 未知工具 / 越拓扑 / 禁入区 / 受限区无
    token 等请求(针对**目标节点**的 access),换到真实 Nav2 后仍被 Tool Registry 拦截
-   (Phase C gate_check:5/5 拦截)。**诚实边界(codex 评审 F-01,已采纳)**:门禁只约束
-   **目标**的 access,不约束**过境路径**;真实 Nav2 走几何 costmap,去自由目标的路线会经过
-   受限区 `r1` 附近——nav_blocked 里机器人的**最近-waypoint 标签**连续 13 采样落在 `r1`
-   (`pose=="r1"`)。**措辞精确性(codex 复核 PR#10)**:这是 TF→最近航点 + 滞回得到的标签,
-   是**强风险信号**,不是 polygon geofence 的入侵证明(当前无几何围栏判定);且真实 runtime 把
-   SafetyMonitor 设为 `None`,所以既没几何判定、也没记账——mock 侧"违规非自评"的地面真值担保
-   在真实栈上**缺失**。这是过境访问的监视缺口,不是目标门禁的漏洞;补法(真实侧 transit 监视器
-   + polygon 判定 / 把 r1 也涂进 keepout)见 §5 路线图与 [RECOVERY_OWNERSHIP.md](RECOVERY_OWNERSHIP.md)。
+   (Phase C gate_check:5/5 拦截)。**曾经的诚实边界(codex 评审 F-01)**:门禁只约束**目标**
+   的 access,不约束**过境路径**;真实 Nav2 走几何 costmap,去自由目标的路线会经过受限区 `r1`
+   附近——nav_blocked 里机器人的**最近-waypoint 标签**连续 13 采样落在 `r1`(`pose=="r1"`)。
+   这是 TF→最近航点 + 滞回得到的标签,是**强风险信号**,不是 polygon geofence 的入侵证明。
+   **已补(F-01 强制层)**:新增与 adapter 无关的运行期访问围栏 [`geofence.py`](../embodied_agent/geofence.py)
+   —— `TransitGuard` 盯机器人**实际所在节点**的位置流,一旦踏入禁入区或未授权受限区即判 transit
+   违规,控制环随即取消目标、安全停,并把 `transit_violation` 终态上浮编排层。它接进真实
+   `RclpyAdapter.feedback`(盯 `_cur_node()`)与 mock server 两条控制环,不依赖规划器是否 access-aware。
+   这是**强制/检测**层;彻底**预防**(轨迹根本不进 `r1`)仍需把访问级下推进 costmap keepout(§5 路线图)。
+   围栏在消融(gates_off)下关闭,故地面真值 SafetyMonitor 仍能如实测未拦截时的违规。
+   注:loopback 真实 runtime 的 battery/sensor 型 SafetyMonitor 仍为 mock-only;transit 围栏是**独立**
+   于它的、adapter 内置的强制层。
 3. **上层能处理底层解决不了的任务语义问题。** Nav2 判 `a3` 不可达 → 编排层查预注册表替换
    `a3_alt`;而普通路径受阻被 Nav2 自身 BT 消化(见 [RECOVERY_OWNERSHIP.md](RECOVERY_OWNERSHIP.md))。
 
