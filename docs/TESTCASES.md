@@ -1,7 +1,7 @@
 # 测试用例文档
 
-三层:34 个自动化用例(pytest)、10 条前后端联调断言(playwright,可重跑)、评测矩阵(90 run)。
-运行方式与 expected outputs 均可复现;自动化层 `pytest tests -q` **expected:`34 passed`**。
+三层:52 个自动化用例(pytest)、10 条前后端联调断言(playwright,可重跑)、评测矩阵(90 run)。
+运行方式与 expected outputs 均可复现;自动化层 `pytest tests -q` **expected:`52 passed`**。
 
 ## 1. 自动化用例(tests/)
 
@@ -58,6 +58,18 @@ gates_off:恰好 5 真实违规(zone×2 + battery×3)。
 
 死端口+无 key → `rule_fallback`;模型输出白名单后校验(图外/受限/dock 剔除,红线抬回 20);
 全部非法 → None(触发降级)。
+
+### 1.8 意图解析健壮性(test_intent_robustness.py,11 例,codex F-10/F-13)
+
+规则兜底对紧邻中文/带下划线后缀的节点 id 正确识别、不误抓(`a1_extra`/`abc123` 不当成 `a1`);
+`report_anomalies` 语义可证伪;LLM 后校验对合法 JSON 的错误类型全不崩、退回 None 走规则兜底
+(`patrol_nodes=null`、`battery_floor_pct="x"`/`NaN`/`inf`/超大整数、`report_anomalies="false"`)。
+
+### 1.9 证据溯源门 + 输出校验(test_registry_evidence.py,7 例,codex F-09/F-14)
+
+`report_finding` 只放行【真拍过、node 在拓扑、且 node==拍摄节点】的证据,伪造/越拓扑/张冠李戴
+一律 `EVIDENCE_UNVERIFIED`;`capture_image` 非幂等;`_execute` 输出校验要求非 None(`[]`/`False`
+等合法假值仍通过)。
 
 ## 2. 前后端联调断言(scripts/capture_viewer.py,可重跑)
 
