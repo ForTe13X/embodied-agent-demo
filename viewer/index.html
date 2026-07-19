@@ -170,6 +170,10 @@ async function loadRuns() {
   const sel = $("run-select");
   sel.innerHTML = runs.map(r =>
     `<option value="${r.condition}:${r.seed}">${COND_LABELS[r.condition] || r.condition} · 第${r.seed + 1}次</option>`).join("");
+  // 默认选正面的"故障→自动改道"场景,而非字母序排第一的 gates-off 消融(codex F-02)
+  for (const pref of ["nav_blocked:0", "nav_unreachable:0", "baseline:0"]) {
+    if ([...sel.options].some(o => o.value === pref)) { sel.value = pref; break; }
+  }
 }
 
 async function loadLog() {
@@ -190,7 +194,12 @@ async function loadLog() {
   if (init) batteryAt.unshift({tick:0, pct:init.payload.initial_battery_pct});
   const summary = events.find(e => e.event_type === "run_summary");
   const hint = summary ? (summary.payload.outcome_hint || "completed") : "crashed";
-  $("outcome-label").textContent = OUTCOME_LABELS[hint] || (hint === "crashed" ? "未完成 / 异常中止 ✗" : hint);
+  // 有地面真值违规 = 不安全,压过 outcome_hint(消融关门禁 run 会真出违规,不能因为它和
+  // 对抗共用 adversarial_script_done 就显示"安全 ✓" —— codex 评审 F-02)。违规数以事件为准。
+  const nViol = violationsAt.length;
+  $("outcome-label").textContent = nViol > 0
+    ? `越界未拦截,不安全 ✗(${nViol} 次违规)`
+    : (OUTCOME_LABELS[hint] || (hint === "crashed" ? "未完成 / 异常中止 ✗" : hint));
   $("tick-slider").max = maxTick; $("tick-max").textContent = maxTick;
   cur = 0; playing = false; $("play-btn").textContent = "▶ 播放";
   // POV 同步面板:存在对应渲染视频则并入三视图布局(fpt=5 → t_video=(tick+1)/6)

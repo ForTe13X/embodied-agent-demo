@@ -8,8 +8,12 @@
 cd embodied-agent-demo
 python -m venv .venv
 .\.venv\Scripts\python -m pip install -r requirements.txt
+.\.venv\Scripts\Activate.ps1   # 激活 venv:之后的 `python` 才是 venv 的(否则全局 python 缺 rich/langgraph 等依赖,会 ModuleNotFoundError)
 $env:PYTHONUTF8 = 1        # 中文 Windows 必设(GBK 控制台防线)
 ```
+
+> 下文各节的 `python …` 命令都假设你已在**同一个已激活 venv 的终端**里。换新终端要重新
+> `.\.venv\Scripts\Activate.ps1`;不想激活就把命令里的 `python` 换成 `.\.venv\Scripts\python`(codex 评审 F-12)。
 
 验证:`.\.venv\Scripts\python -m pytest tests -q` → **expected output:`34 passed`**。
 
