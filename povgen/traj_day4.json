@@ -210,23 +210,23 @@
  "captions": [
   {
    "tick": 0,
-   "text": "PLAN: patrol a2 -> a3  (real Nav2)"
+   "text": "MISSION: patrol A-2 to A-3 (real navigation)"
   },
   {
    "tick": 67,
-   "text": "FAULT CLASSIFIED: nav_unreachable"
+   "text": "FAULT DETECTED: destination unreachable (path blocked)"
   },
   {
    "tick": 67,
-   "text": "DETERMINISTIC RECOVERY -> substitute a3_alt"
+   "text": "AUTO-RECOVERY: reroute to backup observation point"
   },
   {
    "tick": 67,
-   "text": "RETARGET  a3 -> a3_alt"
+   "text": "NEW TARGET: a3 -> a3_alt (backup point)"
   },
   {
    "tick": 178,
-   "text": "MISSION COMPLETE - docked (zero orchestration change)"
+   "text": "MISSION COMPLETE - returned to dock (zero orchestration change)"
   }
  ],
  "violations": [],

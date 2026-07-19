@@ -179,7 +179,7 @@ func _apply(t: float) -> void:
 	obstacle.visible = t >= fault_tick
 
 	var bat := _battery_at(t)
-	hud_tick.text = "TICK %03d   BATTERY %5.1f%%   RUN %s   TRAJ: GROUND-TRUTH EVENT LOG" % [
+	hud_tick.text = "TIME %03ds   BATTERY %5.1f%%   RUN %s   SOURCE: real run recording (replay)" % [
 		int(max(t, 0.0)), bat, String(traj["run_id"])]
 	bat_fg.size.x = 180.0 * clamp(bat / 100.0, 0.0, 1.0)
 	bat_fg.color = Color(0.88, 0.35, 0.4) if bat < 20.0 else (
@@ -233,7 +233,7 @@ func _apply_vlm(t: float) -> void:
 	vlm_label.visible = true
 	vlm_label.position = Vector2(mins.x - 8, mins.y - 40) if mins.y > 60 \
 		else Vector2(mins.x - 8, maxs.y + 14)
-	vlm_label.text = "%s  conf=%.3f" % [label, conf]
+	vlm_label.text = "%s  confidence %d%%" % [label, int(round(conf * 100.0))]
 	vlm_head.visible = true
 	scanline.visible = true
 	scanline.position.y = fmod(t * 260.0, 720.0)
@@ -481,7 +481,7 @@ func _build_hud() -> void:
 	cl.add_child(vlm_label)
 
 	vlm_head = Label.new()
-	vlm_head.text = "PERCEIVE -> structured observation only (never actions)"
+	vlm_head.text = "PERCEIVING - look only, no action"
 	vlm_head.position = Vector2(0, 640)
 	vlm_head.size = Vector2(1280, 30)
 	vlm_head.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER

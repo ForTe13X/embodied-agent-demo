@@ -13,7 +13,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
-from http.server import HTTPServer, SimpleHTTPRequestHandler
+from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
@@ -126,7 +126,8 @@ def main() -> None:
     parser.add_argument("--runs", default=str(RUNS_DIR))
     args = parser.parse_args()
     RUNS_DIR = Path(args.runs).resolve()
-    server = HTTPServer(("127.0.0.1", args.port), Handler)
+    # 线程化:POV 视频是长连接 Range 流,单线程 HTTPServer 会被它堵死其余请求(/api/*)
+    server = ThreadingHTTPServer(("127.0.0.1", args.port), Handler)
     print(f"replay viewer: http://127.0.0.1:{args.port}  (runs: {RUNS_DIR})")
     server.serve_forever()
 

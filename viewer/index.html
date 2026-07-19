@@ -50,47 +50,48 @@
 </head>
 <body>
 <div id="controls">
-  <span id="app-title">Embodied Agent 回放<span class="sub">三视图同轴 · 地面真值 · 只读</span></span>
-  <label>run:
-    <select id="run-select" title="选择要回放的评测 run"></select>
+  <span id="app-title">Embodied Agent 回放<span class="sub">三个视角同步回放 · 只读</span></span>
+  <label>场景:
+    <select id="run-select" title="选择要观看的演示场景"></select>
   </label>
-  <button id="load-btn" class="primary" title="从后端加载该 run 的事件日志">加载</button>
+  <button id="load-btn" class="primary" title="加载这个场景的回放">加载</button>
   <button id="play-btn" title="播放 / 暂停">▶ 播放</button>
   <label>速度:
     <select id="speed-select">
-      <option value="2">2 tick/s</option>
-      <option value="6" selected>6 tick/s</option>
-      <option value="12">12 tick/s</option>
-      <option value="30">30 tick/s</option>
+      <option value="2">2 步/秒</option>
+      <option value="6" selected>6 步/秒</option>
+      <option value="12">12 步/秒</option>
+      <option value="30">30 步/秒</option>
     </select>
   </label>
-  <input type="range" id="tick-slider" min="0" max="0" value="0" title="拖动定位到任意 tick">
-  <span class="chip">tick <b id="tick-label">0</b>/<b id="tick-max">0</b></span>
+  <input type="range" id="tick-slider" min="0" max="0" value="0" title="拖动跳到任意一步">
+  <span class="chip">进度 <b id="tick-label">0</b>/<b id="tick-max">0</b> 步</span>
   <span class="chip">电量 <b id="battery-label">–</b></span>
   <span class="chip">违规 <b id="violation-label">0</b></span>
-  <span class="chip" id="outcome-chip">终态 <b id="outcome-label">–</b></span>
+  <span class="chip" id="outcome-chip">结果 <b id="outcome-label">–</b></span>
+  <label class="chip" style="cursor:pointer" title="给技术观众:显示原始事件日志"><input type="checkbox" id="raw-toggle" style="vertical-align:-1px"> 原始日志</label>
 </div>
 
 <div id="layout">
   <div id="pov-wrap" class="panel">
-    <span class="ptitle">POV 第一人称 · Godot 真值轨迹渲染 · 随 tick 同步</span>
+    <span class="ptitle">第一人称视角 · 机器人真实走位 · 随进度同步</span>
     <video id="pov-video" muted preload="auto"></video>
   </div>
   <div id="topo-panel" class="panel">
-    <span class="ptitle">拓扑地图 · 地面真值轨迹</span>
+    <span class="ptitle">地图俯视 · 机器人真实路线</span>
     <canvas id="topo-canvas" width="760" height="540"></canvas>
     <div id="legend">
-      <span><span class="dot" style="background:#98c379"></span>dock</span>
-      <span><span class="dot" style="background:#61afef"></span>free</span>
-      <span><span class="dot" style="background:#e5c07b"></span>restricted</span>
-      <span><span class="dot" style="background:#e06c75"></span>forbidden</span>
-      <span style="color:#e06c75">━ 受阻边</span>
+      <span><span class="dot" style="background:#98c379"></span>充电坞</span>
+      <span><span class="dot" style="background:#61afef"></span>可通行</span>
+      <span><span class="dot" style="background:#e5c07b"></span>受限区(需权限)</span>
+      <span><span class="dot" style="background:#e06c75"></span>禁入区</span>
+      <span style="color:#e06c75">━ 被堵路段</span>
       <span style="color:#4ec9b0">● 机器人</span>
       <span style="color:#e06c75">◎ 违规</span>
     </div>
   </div>
   <div id="event-feed" class="panel">
-    <span class="ptitle">决策事件流 · ≤ 当前 tick</span>
+    <span class="ptitle">机器人在想什么(实时)</span>
     <div id="feed-body"></div>
   </div>
 </div>
@@ -102,7 +103,7 @@ const NODES = {
   dock:{x:80,y:430,acc:"dock",name:"充电坞"}, c1:{x:210,y:430,acc:"free",name:"走廊1"},
   c2:{x:340,y:430,acc:"free",name:"走廊2"}, a1:{x:480,y:430,acc:"free",name:"A区-1"},
   a2:{x:580,y:330,acc:"free",name:"A区-2"}, a3:{x:660,y:220,acc:"free",name:"A区-3"},
-  a3_alt:{x:520,y:200,acc:"free",name:"A区-3替代"}, b1:{x:250,y:290,acc:"free",name:"B区-1"},
+  a3_alt:{x:520,y:200,acc:"free",name:"A区-3(备用)"}, b1:{x:250,y:290,acc:"free",name:"B区-1"},
   b2:{x:420,y:240,acc:"free",name:"B区-2"}, r1:{x:480,y:510,acc:"restricted",name:"受限捷径"},
   f1:{x:130,y:300,acc:"forbidden",name:"禁入配电室"},
 };
@@ -116,6 +117,47 @@ const FEED_TYPES = new Set(["run_start","plan_built","fault_armed","fault_activa
 const CLS = {fault_injector:"injector", safety_monitor:"safety", exception_manager:"exc",
   replanner:"replan", hitl:"hitl", reporter:"done"};
 
+// ---- 人话映射(默认给外行观众看;技术观众可勾"原始日志"看裸事件)----
+const EVENT_LABELS = {
+  run_start:"任务开始", plan_built:"已规划路线", fault_armed:"预置故障(待触发)",
+  fault_activated:"⚠ 故障触发", goal_accepted:"接受目标点", goal_finished:"目标结束",
+  watchdog_triggered:"发现异常:前方卡住", fault_classified:"判别故障类型",
+  candidates_enumerated:"列出备用点", candidate_chosen:"选定备用点", recovery_applied:"执行恢复",
+  queue_snapshot:"存档未完成任务", queue_resumed:"恢复任务队列", hitl_request:"请求人工确认",
+  hitl_decision:"人工确认结果", guardrail_rejection:"🛡 安全规则拦下一次危险动作",
+  circuit_open:"工具连续失败,已熔断", token_consumed:"用掉一张审批令牌",
+  finding_reported:"上报发现", step_skipped:"跳过该步", violation:"⚠ 越界(安全违规)",
+  run_summary:"任务结束汇总", attempt:"越权尝试(被拦)",
+};
+const OUTCOME_LABELS = {
+  completed_full:"完整完成 ✓", completed:"完成 ✓",
+  degraded_complete:"已完成(主路不通→改用备用点,安全归坞)✓",
+  adversarial_script_done:"越权请求已被拦截,安全 ✓",
+  safe_abort:"安全放弃(未耗电、未越界)", battery_dead:"电量耗尽,未完成 ✗",
+};
+const COND_LABELS = {
+  baseline:"正常巡检(无故障)", nav_blocked:"走廊被封:自动绕道",
+  nav_unreachable:"目标进不去:改走替代点", gate_check:"门禁拦下越权请求",
+  ablation_gates_off:"对照组:关掉门禁,越权被放行", sensor_fault:"传感器故障:降级继续",
+  low_battery:"低电量:回坞充电再继续", tool_failure:"工具失败:重试/熔断",
+  compound:"复合故障(受阻+低电量)", adversarial:"对抗攻击:门禁开,全拦截",
+};
+const nm = id => (NODES[id] ? NODES[id].name : id);   // 节点代号→中文名
+function humanDetail(e) {                              // 事件细节转人话(用中文节点名)
+  const p = e.payload || {};
+  if (Array.isArray(p.route) && p.route.length) return ":" + p.route.map(nm).join("→");
+  if (Array.isArray(p.edge)) return ":" + nm(p.edge[0]) + "↔" + nm(p.edge[1]);
+  if (e.event_type === "recovery_applied" && p.action) {
+    const t = p.action.type;
+    return t === "retry" ? ":重试" : t === "avoid_edge" ? ":绕开被堵路段"
+      : t === "substitute" ? ":改用备用点" : t === "skip_step" ? ":跳过该步" : ":" + t;
+  }
+  if (p.node) return ":" + nm(p.node);
+  if (p.target) return "→" + nm(p.target);
+  if (e.event_type === "guardrail_rejection" && p.code) return "(" + p.code + ")";
+  return "";
+}
+
 let events = [], maxTick = 0, cur = 0, playing = false, lastFrame = 0;
 // 派生索引
 let entries = [], blockedAt = [], violationsAt = [], batteryAt = [], anomalyNode = null;
@@ -127,7 +169,7 @@ async function loadRuns() {
   const runs = await (await fetch("/api/runs")).json();
   const sel = $("run-select");
   sel.innerHTML = runs.map(r =>
-    `<option value="${r.condition}:${r.seed}">${r.condition} / seed ${r.seed}</option>`).join("");
+    `<option value="${r.condition}:${r.seed}">${COND_LABELS[r.condition] || r.condition} · 第${r.seed + 1}次</option>`).join("");
 }
 
 async function loadLog() {
@@ -147,8 +189,8 @@ async function loadLog() {
   const init = events.find(e => e.event_type === "fault_activated" && e.payload.initial_battery_pct);
   if (init) batteryAt.unshift({tick:0, pct:init.payload.initial_battery_pct});
   const summary = events.find(e => e.event_type === "run_summary");
-  $("outcome-label").textContent = summary ?
-    (summary.payload.outcome_hint || "completed") : "crashed";
+  const hint = summary ? (summary.payload.outcome_hint || "completed") : "crashed";
+  $("outcome-label").textContent = OUTCOME_LABELS[hint] || (hint === "crashed" ? "未完成 / 异常中止 ✗" : hint);
   $("tick-slider").max = maxTick; $("tick-max").textContent = maxTick;
   cur = 0; playing = false; $("play-btn").textContent = "▶ 播放";
   // POV 同步面板:存在对应渲染视频则并入三视图布局(fpt=5 → t_video=(tick+1)/6)
@@ -223,9 +265,9 @@ function render() {
   for (const [id, n] of Object.entries(NODES)) {
     ctx.beginPath(); ctx.arc(n.x, n.y, 13, 0, 7);
     ctx.fillStyle = COLORS[n.acc]; ctx.globalAlpha = .92; ctx.fill(); ctx.globalAlpha = 1;
-    ctx.fillStyle = "#0c1116"; ctx.font = "bold 10px Consolas";
+    ctx.fillStyle = "#0c1116"; ctx.font = "9px Consolas";       // 代号:圈内小字副标签
     ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(id, n.x, n.y);
-    ctx.fillStyle = "#8194a7"; ctx.font = "10px Microsoft YaHei";
+    ctx.fillStyle = "#d8e1ea"; ctx.font = "bold 11px Microsoft YaHei";  // 中文名:主标签(观众读这个)
     ctx.fillText(n.name, n.x, n.y + 26);
   }
   // 违规闪烁(违规 tick 后 6 tick 内)
@@ -252,13 +294,19 @@ function render() {
     ctx.fillText("battery " + bat.toFixed(1) + "%", 168, 30);
   }
   // 事件流
+  const raw = $("raw-toggle") && $("raw-toggle").checked;
   const body = $("feed-body");
   body.innerHTML = events.filter(e => e.tick <= cur && FEED_TYPES.has(e.event_type))
     .map(e => {
       const cls = CLS[e.actor] || "";
-      const p = JSON.stringify(e.payload);
-      return `<div class="ev ${cls}"><span class="t">t=${String(e.tick).padStart(3)}</span> ` +
-             `<b>${e.actor}</b> ${e.event_type} ${p.length > 110 ? p.slice(0, 110) + "…" : p}</div>`;
+      if (raw) {   // 技术观众:裸事件(actor + event_type + JSON payload)
+        const p = JSON.stringify(e.payload);
+        return `<div class="ev ${cls}"><span class="t">t=${String(e.tick).padStart(3)}</span> ` +
+               `<b>${e.actor}</b> ${e.event_type} ${p.length > 110 ? p.slice(0, 110) + "…" : p}</div>`;
+      }
+      const label = EVENT_LABELS[e.event_type] || e.event_type;   // 外行观众:人话
+      return `<div class="ev ${cls}"><span class="t">第${String(e.tick).padStart(3)}步</span> ` +
+             `${label}${humanDetail(e)}</div>`;
     }).join("");
   body.scrollTop = body.scrollHeight;
 }
@@ -282,6 +330,7 @@ $("play-btn").onclick = () => {
 };
 $("tick-slider").oninput = e => { cur = parseInt(e.target.value); playing = false;
   $("play-btn").textContent = "▶ 播放"; render(); };
+$("raw-toggle").onchange = render;   // 人话 ⇄ 原始日志
 
 loadRuns().then(loadLog);
 requestAnimationFrame(frame);
