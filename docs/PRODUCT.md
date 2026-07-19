@@ -48,12 +48,15 @@ quadrantChart
 
 ## 5. 路线图(每步等上一步证明价值)
 
-| 阶段 | 内容 | 为什么等 |
+> 定位与"VLA 挂在哪一层"见 [POSITIONING.md](POSITIONING.md);恢复归属见 [RECOVERY_OWNERSHIP.md](RECOVERY_OWNERSHIP.md)。
+
+| 阶段 | 内容 | 状态 / 为什么 |
 |---|---|---|
-| ✅ Phase A(本仓库) | mock 底座上全闭环 + 评测 | 先证明编排层本身站得住 |
-| Phase B | WSL2/Docker + TurtleBot3/Nav2,换 rclpy adapter | 契约已写死(ADAPTER_CONTRACT),止损线预注册:day4 13:00 见不到 `/navigate_to_pose` 即放弃 |
-| Phase C | 真实感知(VLM)替换 perceive mock | 需先有 Phase B 的真实传感数据流 |
-| Phase D | 跨 run 记忆作为显式实验条件 | 需重新预注册(记忆污染 seed 独立性) |
+| Phase A(本仓库) | mock 底座上全闭环 + 90 条预注册评测 | ✅ 已完成——先证明编排层本身站得住 |
+| Phase B | 换 rclpy adapter 接真实 ROS 2 / Nav2(容器 + loopback_sim),故障用 keepout 注入 | ✅ 已完成,实测见 [phase_b/FINDINGS.md](../phase_b/FINDINGS.md) |
+| Phase C | 预注册故障注入评测从 mock 搬到真实 Nav2(可移植条件),mock⇄real 对比 | ✅ 已完成,见 [phase_c/PHASE_C_RESULTS.md](../phase_c/PHASE_C_RESULTS.md) |
+| **Phase D(下一步,纯仿真)** | `execute_vla_skill` + 异步 action-chunk runtime + **独立 Safety Shield** + mock VLA policy;把"安全监管一个 learned policy"接进现有 registry/exception/eventlog | 岗位核心价值(把不稳定 policy 变得可调用/可约束/可取消/可恢复/可审计),仿真可证,不需真机 |
+| Phase E+(需硬件) | 真臂 + 遥操作数据 + SmolVLA/ACT 微调 + 真实闭环 eval + intervention 数据飞轮;真实 VLM 感知进控制闭环;跨 run 记忆作为显式实验条件 | 需要真机械臂 / GPU / 相机,不在当前范围;如实标注为未来 |
 
 ## 6. 已知限制
 

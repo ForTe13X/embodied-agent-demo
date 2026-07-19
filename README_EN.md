@@ -11,6 +11,8 @@ A simulation demo for an embodied-agent orchestration layer. The language model 
 This repository focuses on the control layer around a robot-like agent: task planning, tool gating, fault recovery, replay, and repeatable evaluation. The main demo and the 90-run pre-registered evaluation run on a mock navigation server (simulation, no physical robot). See the `RobotAdapter` boundary in [docs/ADAPTER_CONTRACT.md](docs/ADAPTER_CONTRACT.md).
 
 > **First time here?** Start with the [terminology & codename cheat-sheet (docs/GLOSSARY.md)](docs/GLOSSARY.md) — one page covering mock⇄real, nav2_loopback_sim, the topology codenames, and the system layers that the other docs use liberally.
+>
+> **Want the positioning (and how VLA fits)?** Read [docs/POSITIONING.md](docs/POSITIONING.md) — this is a task-level orchestration + safety runtime; VLA is a future learned *skill* that hangs *under* it. See also the [Recovery Ownership Matrix (docs/RECOVERY_OWNERSHIP.md)](docs/RECOVERY_OWNERSHIP.md) — which layer owns which recovery, grounded in a Phase C empirical finding.
 
 **Phase B (done):** swapping in one adapter connects this **same LangGraph orchestration graph** to **real ROS 2 Nav2** (Jazzy + nav2_loopback_sim, in a container) with zero orchestration-code changes. Faults are injected via a keepout costmap filter; recovery comes from the deterministic kernel's lookup table — mock ⇄ real Nav2 is interchangeable, verified 1:1 against the real stack. Measured runs and reproduction: [phase_b/FINDINGS.md](phase_b/FINDINGS.md).
 
@@ -25,6 +27,7 @@ This repository focuses on the control layer around a robot-like agent: task pla
 | Artifact | Location |
 |---|---|
 | **Terminology & codename cheat-sheet (read this first)** | [docs/GLOSSARY.md](docs/GLOSSARY.md) |
+| **Positioning + how VLA fits + Recovery Ownership Matrix** | [docs/POSITIONING.md](docs/POSITIONING.md), [docs/RECOVERY_OWNERSHIP.md](docs/RECOVERY_OWNERSHIP.md) |
 | Demo recording, about 4 minutes, with bilingual subtitles | [docs/recording/demo.mp4](docs/recording/demo.mp4) + [demo.srt](docs/recording/demo.srt) |
 | Godot 4 POV rendering pipeline driven by ground-truth trajectories | [povgen/](povgen/) + [scripts/export_traj.py](scripts/export_traj.py) |
 | Local VLM frame annotation experiment and limitation notes | [scripts/vlm_annotate.py](scripts/vlm_annotate.py) -> [annotated frame](docs/screenshots/vlm_live_annotated.png) |
