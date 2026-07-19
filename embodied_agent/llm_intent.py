@@ -52,7 +52,9 @@ def _coerce_bool(v, default: bool) -> bool:
 def _coerce_float(v, default: float) -> float:
     try:
         f = float(v)
-    except (TypeError, ValueError):              # None / "not-a-number" → 退回默认,不崩
+    except (TypeError, ValueError, OverflowError):  # None/"not-a-number"/超大 JSON 整数 → 退回默认,不崩
+        # OverflowError:json.loads 把超长整数字面量解析成 Python int,float() 溢出会抛它;
+        # 漏接会穿透 _validate→parse_intent 崩掉 live demo,规则兜底反而没机会跑
         return default
     # 拒绝 NaN/inf:否则 "NaN" 会被当电量阈值,破坏"红线只能收紧"的不变量(codex 复核 PR#10)
     return f if math.isfinite(f) else default
