@@ -118,6 +118,10 @@ class ToolRegistry:
         self._token_counter = 0
         self._tokens: dict[str, dict] = {}
         self._circuits: dict[str, _Circuit] = {}
+        # 证据溯源账本(codex 评审 F-09):image_id → 拍摄时机器人所在节点。
+        # report_finding 只接受【真拍过、且节点相符】的证据 —— 白名单能限制"调哪个工具",
+        # 但不能保证该工具提交的 evidence 有来源;这本账把"来源"也钉死。
+        self._capture_ledger: dict[str, str] = {}
         self.tools: dict[str, ToolSpec] = {}
         self._register_all()
 
@@ -284,9 +288,26 @@ class ToolRegistry:
                 raise ToolError("SENSOR_UNHEALTHY", "传感器异常", retriable=False)
 
         async def capture_image(p: EmptyIn) -> dict:
-            return await a.capture()
+            data = await a.capture()
+            # 记账:这张图是在机器人【当前所在节点】拍的(证据来源)
+            state = await a.get_state()
+            self._capture_ledger[data["image_id"]] = state.get("pose")
+            return data
 
         async def report_finding(p: ReportFindingIn) -> dict:
+            # F-09 证据溯源:image_id 必须真拍过、node 必须在拓扑内、且必须是拍摄时的所在节点。
+            # 伪造/越拓扑/张冠李戴的证据一律拒(不进 finding_reported,不冒充有来源的发现)。
+            captured_at = self._capture_ledger.get(p.image_id)
+            if captured_at is None:
+                raise ToolError("EVIDENCE_UNVERIFIED",
+                                f"image_id {p.image_id!r} 无捕获记录", retriable=False)
+            if not self.topo.has(p.node_id):
+                raise ToolError("EVIDENCE_UNVERIFIED",
+                                f"node {p.node_id!r} 不在拓扑", retriable=False)
+            if captured_at != p.node_id:
+                raise ToolError("EVIDENCE_UNVERIFIED",
+                                f"证据节点不符:拍于 {captured_at!r},报为 {p.node_id!r}",
+                                retriable=False)
             self.log.emit("registry", "finding_reported", image_id=p.image_id,
                           label=p.label, node_id=p.node_id)
             return {"report_id": f"report-{p.image_id}"}
@@ -322,7 +343,7 @@ class ToolRegistry:
         reg("get_nav_feedback", GoalIdIn, get_nav_feedback, True, ("status",))
         reg("cancel_navigation", GoalIdIn, cancel_navigation, True, ("canceled",))
         reg("perceive", PerceiveIn, perceive, True, ("objects",))
-        reg("capture_image", EmptyIn, capture_image, True, ("image_id",))
+        reg("capture_image", EmptyIn, capture_image, False, ("image_id",))  # F-14:非幂等,避免自动重试产生第二次捕获
         reg("report_finding", ReportFindingIn, report_finding, False, ("report_id",))
         reg("return_to_dock", EmptyIn, return_to_dock, False, ("goal_id",))
         reg("ask_human_confirmation", AskHumanIn, ask_human_confirmation, False,
@@ -339,10 +360,12 @@ class ToolRegistry:
         if injected == "malformed":
             data = {k: v for k, v in data.items()
                     if k not in spec.required_output_keys[:1]}
-        missing = [k for k in spec.required_output_keys if k not in data]
+        # F-14:不只查 key 是否存在,还要求非 None(空列表 []/布尔 False 都算有值,合法通过)——
+        # 挡住 battery_pct=None 这类"键在、值空"的输出流进编排层数值比较。
+        missing = [k for k in spec.required_output_keys if k not in data or data[k] is None]
         if missing:
             raise ToolError("SCHEMA_VIOLATION_OUT",
-                            f"{spec.name} 输出缺少字段 {missing}", retriable=True)
+                            f"{spec.name} 输出缺少/为空字段 {missing}", retriable=True)
         return data
 
     # ---- 结果封装 -----------------------------------------------------------
