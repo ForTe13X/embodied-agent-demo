@@ -47,8 +47,27 @@ VLA 是挂在编排层下面的**一类 learned skill**,不是整个系统。它
 - **不是物理仿真**:运动学 sim,不模拟接触力/摩擦/碰撞动力学。
 - 价值在 **runtime / 安全集成 / 可审计**,不是操作物理或模型能力。详见 [docs/POSITIONING.md](../docs/POSITIONING.md)。
 
-## 下一步(Phase D-2)
+## Phase D-2:端到端复合任务(已完成)
 
-把 `execute_vla_skill` 注册成**一个 skill**接进现有 Tool Registry + exception_manager + event log
-(上层只见 running/progress/fault,不逐帧调 policy);加预注册 eval(报安全投影率/过期率/恢复归属)。
-恢复归属见 [docs/RECOVERY_OWNERSHIP.md](../docs/RECOVERY_OWNERSHIP.md)。
+`execute_vla_skill` 已注册成**一个 skill**接进现有 Tool Registry + 共享事件日志(同一门禁路径,
+上层只见 running/progress/fault)。复合任务`去工作台 → VLA 抓取 → 校验 → 归坞`跑通,3 条件预注册
+命中,recovery 由 Skill Supervisor 按 [恢复职责矩阵](../docs/RECOVERY_OWNERSHIP.md) 路由:
+
+| 条件 | 终态 | skill 归属 |
+|---|---|---|
+| baseline | completed_full | succeeded |
+| unsafe | degraded_complete | aborted_unsafe(安全停,不重试) |
+| unreachable | degraded_complete | escalated(重试 2 次后上浮) |
+
+```powershell
+.\.venv\Scripts\python phase_d\composite_mission.py baseline     # 单条件跑
+.\.venv\Scripts\python phase_d\run_composite_eval.py             # 3 条件预注册评测 + 审计日志
+.\.venv\Scripts\python -m pytest phase_d -q                       # 全部 18 项
+```
+
+完整结果与逐条解读:[PHASE_D_RESULTS.md](PHASE_D_RESULTS.md)。
+
+## 再下一步(需硬件,Phase E+)
+
+真臂 + 遥操作数据 + SmolVLA/ACT 微调 + 真实闭环 eval + intervention 数据飞轮;真实 VLM 感知进
+控制闭环。属未来,不在当前范围(见 [docs/POSITIONING.md](../docs/POSITIONING.md) 路线图)。

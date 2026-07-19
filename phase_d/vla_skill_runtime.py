@@ -60,13 +60,14 @@ class _Clock:
 class VLASkillRuntime:
     def __init__(self, policy: MockVLAPolicy, shield: SafetyShield, sim: TabletopSim,
                  *, inference_latency_s: float = 0.0, clock: _Clock | None = None,
-                 events: list | None = None):
+                 events: list | None = None, emit_fn=None):
         self.policy = policy
         self.shield = shield
         self.sim = sim
         self.inference_latency_s = inference_latency_s   # 模拟推理耗时(测 stale 用)
         self.clock = clock or _Clock()
         self.events = events if events is not None else []
+        self.emit_fn = emit_fn      # 可选:把 skill 事件转发进共享事件日志(Phase D-2 编排集成)
         self._cancelled = False
         self._seq = 0
 
@@ -76,6 +77,8 @@ class VLASkillRuntime:
     def _emit(self, etype: str, **payload) -> None:
         self.events.append({"seq": len(self.events), "t": round(self.clock.now(), 4),
                             "actor": "vla_skill_runtime", "event_type": etype, "payload": payload})
+        if self.emit_fn is not None:
+            self.emit_fn(etype, **payload)
 
     async def _infer(self, goal: SkillGoal, obs: Observation):
         if self.inference_latency_s > 0:
