@@ -66,6 +66,13 @@ def test_validate_nan_battery_floor_rejected():
         assert intent is not None and intent.battery_floor_pct == 20.0
 
 
+def test_validate_huge_int_battery_floor_falls_back():
+    # 超大 JSON 整数字面量:json.loads 得 Python int,float() 抛 OverflowError——
+    # 必须被兜底而非穿透崩溃(post-merge 审计:_coerce_float 漏接 OverflowError)
+    intent = _validate({"patrol_nodes": ["a1"], "battery_floor_pct": 10 ** 400}, "x", TOPO)
+    assert intent is not None and intent.battery_floor_pct == 20.0
+
+
 def test_rule_parse_underscore_suffix_not_grabbed_as_node():
     # "a1_extra" 不应被当成节点 a1(下划线边界;codex 复核 PR#10)
     intent = rule_parse("去 a1_extra 巡检", TOPO)

@@ -24,7 +24,7 @@ VLA 是挂在编排层下面的**一类 learned skill**,不是整个系统。它
 ## 跑
 
 ```powershell
-.\.venv\Scripts\python -m pytest phase_d -q      # 14 项:安全核心 + 异步运行时
+.\.venv\Scripts\python -m pytest phase_d -q      # 18 项:安全核心 + 异步运行时 + 复合任务
 .\.venv\Scripts\python phase_d\demo.py            # 6 场景汇总(含对抗)
 ```
 

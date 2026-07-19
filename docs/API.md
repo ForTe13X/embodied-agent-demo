@@ -31,8 +31,8 @@ flowchart LR
 | `get_nav_feedback` | `goal_id` | ✓ | `{"status":"executing","current_node":"c1","current_edge":["c1","c2"],"edges_done":1,"edges_total":3,"velocity":1.0,"stall_ticks":0}` |
 | `cancel_navigation` | `goal_id` | ✓ | `{"canceled":true}`(目标已终态时 `false`) |
 | `perceive` | `query="anomaly"` | ✓ | `{"objects":[{"label":"unattended_box","confidence":0.874}],"at_node":"a2"}`;无异常时 `objects:[]` |
-| `capture_image` | — | ✓ | `{"image_id":"img-1","tick":42}` |
-| `report_finding` | `image_id`,`label`,`node_id` | ✗ | `{"report_id":"report-img-1"}` |
+| `capture_image` | — | ✗ | `{"image_id":"img-1","tick":42}`(F-14 非幂等:重试=第二次物理捕获,不自动重试) |
+| `report_finding` | `image_id`,`label`,`node_id` | ✗ | `{"report_id":"report-img-1"}`;**F-09 证据门**:`image_id` 须为先前 `capture_image` 所得、`node_id` 须在拓扑内、且须等于该图的拍摄节点,否则 `EVIDENCE_UNVERIFIED` |
 | `return_to_dock` | — | ✗ | `{"goal_id":"goal-6"}`(dock 目标豁免电量闸) |
 | `ask_human_confirmation` | `message`,`scope` | ✗ | 批准:`{"approved":true,"approval_token":"tok-1"}`;拒绝/超时:`{"approved":false}` |
 
@@ -48,6 +48,7 @@ flowchart LR
 | `TIMEOUT` / `SCHEMA_VIOLATION_OUT` | 执行超时 / 输出缺字段(可重试,幂等工具自动重试 1 次) | ✓ |
 | `CIRCUIT_OPEN` | 连续失败 ≥3 已熔断,本 run 不再调用 | — |
 | `NAV_BUSY` | 已有在飞目标 | ✓ |
+| `EVIDENCE_UNVERIFIED` | `report_finding` 证据不可溯源(image_id 无捕获记录 / node 越拓扑 / 与拍摄节点不符) | ✗(调用方错误,不可重试) |
 
 ### 2.2 审批 token 生命周期
 

@@ -16,11 +16,11 @@ This repository focuses on the control layer around a robot-like agent: task pla
 
 **Phase B (done):** swapping in one adapter connects this **same LangGraph orchestration graph** to **real ROS 2 Nav2** (Jazzy + nav2_loopback_sim, in a container) with zero orchestration-code changes. Faults are injected via a keepout costmap filter; recovery comes from the deterministic kernel's lookup table — mock ⇄ real Nav2 is interchangeable, verified 1:1 against the real stack. Measured runs and reproduction: [phase_b/FINDINGS.md](phase_b/FINDINGS.md).
 
-![Day-4 real-robot integration excerpt: the same orchestration now drives a real navigation stack (ROS 2 Nav2); when inspection point a3 is fenced off and ruled unreachable, the system automatically reroutes to backup point a3_alt by a preset rule](docs/recording/day4_demo.gif)
+![Day-4 real-Nav2 integration excerpt: the same orchestration now drives a real ROS 2 Nav2 stack (nav2_loopback_sim); when inspection point a3 is fenced off and ruled unreachable, the system automatically reroutes to backup point a3_alt by a preset rule](docs/recording/day4_demo.gif)
 
 *13-second excerpt (the fault-recovery moment from one real run); full 3-minute narrated bilingual version: [docs/recording/day4_demo.mp4](docs/recording/day4_demo.mp4).*
 
-**Phase C (done):** we re-ran the pre-registered fault-injection eval on the real robot navigation stack (Nav2), not just in simulation. On the conditions that carry over, the real robot and the simulation reach the exact same final outcome. See [phase_c/PHASE_C_RESULTS.md](phase_c/PHASE_C_RESULTS.md).
+**Phase C (done):** we re-ran the pre-registered fault-injection eval on the real ROS 2 / Nav2 software stack (still nav2_loopback_sim — no physical robot, no Gazebo physics). On the conditions that carry over, the real Nav2 stack and the mock reach the exact same final outcome. See [phase_c/PHASE_C_RESULTS.md](phase_c/PHASE_C_RESULTS.md).
 
 ## Included Artifacts
 
