@@ -113,13 +113,14 @@ const COLORS = {dock:"#98c379", free:"#61afef", restricted:"#e5c07b", forbidden:
 const FEED_TYPES = new Set(["run_start","plan_built","fault_armed","fault_activated","goal_accepted",
   "goal_finished","watchdog_triggered","fault_classified","candidates_enumerated","candidate_chosen",
   "recovery_applied","queue_snapshot","queue_resumed","hitl_request","hitl_decision","guardrail_rejection",
-  "circuit_open","token_consumed","finding_reported","step_skipped","violation","run_summary","attempt"]);
+  "circuit_open","token_consumed","finding_reported","step_skipped","violation","run_summary","attempt",
+  "transit_guard_stop"]);
 const CLS = {fault_injector:"injector", safety_monitor:"safety", exception_manager:"exc",
   replanner:"replan", hitl:"hitl", reporter:"done"};
 // 高信号事件按【事件语义】上色,优先于 actor——registry/observer 这些 actor 会同时发普通与安全
 // 事件,只按 actor 上色会让"🛡拦截""发现异常""熔断"这类拿不到高亮(post-merge 审计)
 const EVENT_CLS = {guardrail_rejection:"safety", circuit_open:"exc",
-  watchdog_triggered:"exc", finding_reported:"done"};
+  watchdog_triggered:"exc", finding_reported:"done", transit_guard_stop:"safety"};
 
 // ---- 人话映射(默认给外行观众看;技术观众可勾"原始日志"看裸事件)----
 const EVENT_LABELS = {
@@ -132,6 +133,7 @@ const EVENT_LABELS = {
   circuit_open:"工具连续失败,已熔断", token_consumed:"用掉一张审批令牌",
   finding_reported:"上报发现", step_skipped:"跳过该步", violation:"⚠ 越界(安全违规)",
   run_summary:"任务结束汇总", attempt:"越权尝试(被拦)",
+  transit_guard_stop:"🛑 越界拦停:实际路径闯入禁区/未授权受限区",
 };
 const OUTCOME_LABELS = {
   completed_full:"完整完成 ✓", completed:"完成 ✓",

@@ -38,7 +38,8 @@ Phase C 把同一套编排从 mock 底盘搬到真实 ROS 2 / Nav2,`nav_blocked`
 | 替代巡检点选择 / 任务降级 | **编排层** | `substitute_target` → `degraded_report` | ✅ `recovery.py` NAV_UNREACHABLE 链 |
 | 底盘停滞(不自 replan 的底盘) | **编排层** | 停滞水位 → `retry_same_route` → `replan_avoid_edge` | ✅ mock + Day3-D no-replan BT 实测 |
 | 低电量抢占 | 编排层 / 机器人安全(安全类优先) | `dock_recharge_resume`,抢占任务类 | 🟡 mock-only(loopback 无电量模型) |
-| 禁区 / 权限 | 确定性策略层(Tool Registry) | 门禁拦截,token 也不放行 forbidden | ✅ mock + real 同拦(门禁在 adapter 之上) |
+| 禁区 / 权限(**目标节点** access) | 确定性策略层(Tool Registry) | 门禁拦截,token 也不放行 forbidden | ✅ mock + real 同拦(门禁在 adapter 之上) |
+| **过境访问违规**(轨迹闯入未授权受限/禁入区) | **运行期访问围栏(adapter 内置,注册表之下)** | 盯实际位置流 → 踏入即取消目标、安全停、上浮 `transit_violation` | 🟡 mock 强制端到端实测 + 纯逻辑单测;真实 `RclpyAdapter` 同源接入,复验需容器(F-01)。彻底预防(costmap keepout)仍属路线图 |
 | 传感器降级 | 编排层 | `skip_step_degraded` → `pause_and_escalate` | 🟡 mock-only |
 | 工具超时 / 畸形 | 注册表 + 编排层 | 幂等重试 → 熔断 → `failure_report_and_degrade` | 🟡 mock-only |
 | **抓取姿态微调 / 局部视觉纠正** | **VLA / manipulation skill** | policy 闭环内自纠(chunk 重预测) | ⬜ 路线图(Phase D 仿真 runtime) |

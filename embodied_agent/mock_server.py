@@ -19,6 +19,7 @@ from enum import Enum
 from typing import Optional
 
 from .events import EventLog
+from .geofence import TransitGuard
 from .safety import SafetyMonitor
 from .world import TopoMap, World, edge_key
 
@@ -37,6 +38,9 @@ class NavGoal:
     route: list[str]
     authorized: bool
     started_tick: int
+    # F-01 运行期围栏:本次导航已授权可进入的受限节点 + 围栏是否开启(消融时关)
+    authorized_zones: frozenset = frozenset()
+    geofence_on: bool = True
     status: GoalStatus = GoalStatus.EXECUTING
     reason: Optional[str] = None
     edge_idx: int = 0
@@ -62,6 +66,7 @@ class MockNavServer:
         self.log = event_log
         self.rng = rng_nav
         self.safety = safety
+        self.guard = TransitGuard(topo.access)   # F-01 运行期访问围栏(强制/检测层)
         self._goals: dict[str, NavGoal] = {}
         self._active: Optional[NavGoal] = None
         self._counter = 0
@@ -77,6 +82,7 @@ class MockNavServer:
         restricted_ok_nodes: set = frozenset(),
         allow_all_restricted: bool = False,
         allow_forbidden_target: bool = False,
+        geofence_on: bool = True,
     ) -> dict:
         if self._active is not None:
             return {"error": "busy", "active_goal": self._active.goal_id}
@@ -109,7 +115,9 @@ class MockNavServer:
                           status=goal.status.value, reason=reason)
             return {"goal_id": goal_id}
 
-        goal = NavGoal(goal_id, target, route, authorized, self.log.clock.tick)
+        goal = NavGoal(goal_id, target, route, authorized, self.log.clock.tick,
+                       authorized_zones=frozenset(restricted_ok_nodes),
+                       geofence_on=geofence_on)
         goal.edge_cost = self._edge_cost(route, 0) if len(route) > 1 else 0
         self._goals[goal_id] = goal
         self._active = goal
@@ -196,6 +204,16 @@ class MockNavServer:
         # 到达下一节点
         self.world.robot_node = b
         self.safety.on_node_entered(goal.goal_id, b, goal.authorized)
+        # F-01 运行期围栏:踏入未授权受限/禁入区即安全停(强制,不止记录)。
+        # 门禁开时 route() 本就不会把未授权 transit 节点排进路线,故此闸在正常评测里恒静默;
+        # 它守的是真实 Nav2 那种 access-盲规划器(costmap 无 keepout)可能画出的穿越轨迹。
+        v = self.guard.check(b, authorized_zones=goal.authorized_zones,
+                             enabled=goal.geofence_on)
+        if v is not None:
+            self.log.emit("safety_runtime", "transit_guard_stop", goal_id=goal.goal_id,
+                          node=b, kind=v.kind, access=v.access)
+            self._finish(goal, GoalStatus.ABORTED, reason=f"transit_violation:{v.kind}")
+            return
         goal.edge_idx += 1
         goal.edge_ticks_done = 0
         if b == goal.target:

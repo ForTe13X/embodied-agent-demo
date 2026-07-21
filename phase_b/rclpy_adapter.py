@@ -36,6 +36,8 @@ from geometry_msgs.msg import PoseStamped
 from nav2_simple_commander.robot_navigator import BasicNavigator, TaskResult
 from tf2_ros import Buffer, TransformListener
 
+from embodied_agent.geofence import TransitGuard  # 与 mock 共用同一套 transit 判定(F-01)
+
 _VEL_PAT = re.compile(r"(cmd_vel|/velocity|/torque|/effort|joint_trajectory)", re.I)
 _WP_PAT = re.compile(r"^\s*(\w+):\s*\{x:\s*([-\d.]+),\s*y:\s*([-\d.]+),\s*yaw:\s*([-\d.]+)")
 _NODE_PAT = re.compile(
@@ -81,7 +83,8 @@ def _load_topo(path):
 class RclpyAdapter:
     def __init__(self, waypoints="/hostpb/world/waypoints.yaml",
                  topo="/hostpb/world/topo.yaml", *, tick_seconds=1.0,
-                 stall_eps_m=0.05, near_goal_m=0.35, cur_switch_margin_m=0.30):
+                 stall_eps_m=0.05, near_goal_m=0.35, cur_switch_margin_m=0.30,
+                 geo_dwell_samples=1):
         self.wp = _load_waypoints(waypoints)
         self.nodes, self.edges = _load_topo(topo)
         self._adj = self._build_adj(self.edges)
@@ -89,6 +92,14 @@ class RclpyAdapter:
         self.stall_eps_m = stall_eps_m          # 一拍内 distance_remaining 降幅阈值
         self.near_goal_m = near_goal_m          # 距目标 < 此值不再累加 stall(到达减速段免判)
         self.cur_switch_margin_m = cur_switch_margin_m  # 最近邻滞回:新节点近于当前超此值才切
+        # F-01 围栏灵敏度(安全审查:单采样最近邻标签可能误停掠过受限 waypoint 的合法轨迹)。
+        # geo_dwell_samples:受限区违规需连续 N 次采样命中同一节点才取消(默认 1=踏入即停,
+        # 保持当前行为;调高可换取更抗误停但更晚的强制)。禁入区始终单采样即停(铁律不容延迟)。
+        self.geo_dwell_samples = max(1, int(geo_dwell_samples))
+        # 安全前提:受限/禁入节点必须有 waypoint,否则围栏永远"看不到"它(采样只报 wp 里的最近邻)。
+        missing_wp = [n for n, s in self.nodes.items()
+                      if s.get("access", "free") != "free" and n not in self.wp]
+        assert not missing_wp, f"受限/禁入节点缺 waypoint,围栏无法采样: {missing_wp}"
 
         self.nav = BasicNavigator()             # 唯一运动接口 = 其内部 NavigateToPose ActionClient
         self.tf = Buffer()
@@ -99,6 +110,10 @@ class RclpyAdapter:
         self._g: dict[str, dict] = {}           # goal_id -> 运行态记录
         self._cur: Optional[str] = None         # _cur_node 滞回缓存
         self._start_node: Optional[str] = None
+        # F-01 运行期访问围栏:盯 _cur_node() 的实际位置流,踏入未授权受限/禁入区即安全停。
+        # 真实 Nav2 在 costmap 上规划(r1 非 keepout),故轨迹可能穿过 r1——目标被门禁、轨迹没有;
+        # 这一层不依赖规划器是否 access-aware,直接盯实际位置强制。
+        self.guard = TransitGuard(lambda n: self.nodes[n]["access"])
 
     # ---- 结构性保证:无速度接口 -----------------------------------------
     def assert_no_velocity_interface(self) -> list[str]:
@@ -126,7 +141,8 @@ class RclpyAdapter:
                         avoid_edges: set = frozenset(),
                         restricted_ok_nodes: set = frozenset(),
                         allow_all_restricted: bool = False,
-                        allow_forbidden_target: bool = False) -> dict:
+                        allow_forbidden_target: bool = False,
+                        geofence_on: bool = True) -> dict:
         # 注:avoid_edges/restricted_ok_nodes/allow_* 保留以与 Protocol 同签名。Phase B 里
         # 受阻边/隔离节点故障靠 keepout 掩码在 send_goal 前改(Day-3 接入);这些参数当前仅用于
         # 【进度路线的 access 感知计算】,不改变底盘是否发目标(门禁归注册表,与 mock server 一致)。
@@ -167,7 +183,11 @@ class RclpyAdapter:
                             "t0": time.time(), "finish_t": None, "start": start,
                             "route": planned, "max_edge_idx": 0,
                             "last_dist": None, "stall": 0, "last_pose": None,
-                            "last_t": time.time()}
+                            "last_t": time.time(),
+                            # F-01 围栏上下文:已授权受限区 + 围栏开关(消融/gates_off 关)
+                            "authorized_zones": frozenset(restricted_ok_nodes),
+                            "geofence_on": geofence_on,
+                            "_geo_viol_node": None, "_geo_viol_count": 0}
         return {"goal_id": goal_id}
 
     async def feedback(self, goal_id: str) -> Optional[dict]:
@@ -176,12 +196,20 @@ class RclpyAdapter:
             return None
         if g["terminal"] is not None:
             return self._terminal_fb(goal_id, g)
+
+        # F-01 运行期围栏:先于 _converge 判(安全审查:否则末段穿越 r1 若在一个 poll 间隙内
+        # 自然 SUCCEEDED,会抢在围栏前收敛成 succeeded)。与 mock on_tick 的"guard 先于 success"一致。
+        # _cur_node() 自身 spin 刷新 TF,不依赖 _converge 的 isTaskComplete。
+        cur = self._cur_node()
+        geo_stop = self._geofence_step(goal_id, g, cur)
+        if geo_stop is not None:
+            return geo_stop
+
         conv = self._converge(goal_id)       # 完成即收敛(置 terminal、清 _active)
         if conv is not None:
             return self._terminal_fb(goal_id, conv)
 
         fb = self.nav.getFeedback()
-        cur = self._cur_node()
         route = g["route"]
         edges_total = max(1, len(route) - 1)
         idx = route.index(cur) if cur in route else g["max_edge_idx"]
@@ -283,6 +311,40 @@ class RclpyAdapter:
             pass
 
     # ---- 内部工具 --------------------------------------------------------
+    def _geofence_step(self, goal_id: str, g: dict, cur: Optional[str]) -> Optional[dict]:
+        """F-01 围栏一拍:按实际位置 `cur` 判越界,按 dwell 决定是否安全停。
+        返回 terminal feedback(已停)或 None(未触发)。用 g.get 兜底,不假设 g 一定有 geo 键
+        (安全审查:early-return 分支不含 geo 键;虽今日靠终态短路不会走到这里,仍去掉隐式依赖)。"""
+        if cur is None:
+            return None
+        v = self.guard.check(cur, authorized_zones=g.get("authorized_zones", frozenset()),
+                             enabled=g.get("geofence_on", True))
+        if v is None:                        # 合法节点:清 dwell 计数
+            g["_geo_viol_node"] = None
+            g["_geo_viol_count"] = 0
+            return None
+        # 禁入区:单采样即停(铁律);受限区:连续 geo_dwell_samples 次同节点命中才停(抗掠过误停)
+        if cur == g.get("_geo_viol_node"):
+            g["_geo_viol_count"] = g.get("_geo_viol_count", 0) + 1
+        else:
+            g["_geo_viol_node"] = cur
+            g["_geo_viol_count"] = 1
+        dwell = 1 if v.kind == "forbidden_transit" else self.geo_dwell_samples
+        if g["_geo_viol_count"] < dwell:
+            return None                      # 未达 dwell:继续观察,尚未取消
+        cancelled = True
+        try:
+            self.nav.cancelTask()
+        except Exception:
+            cancelled = False                # 安全审查:cancel 失败不可静默——独立 reason 上浮
+        g["terminal"] = "aborted"
+        g["reason"] = (f"transit_violation:{v.kind}:{cur}"
+                       + ("" if cancelled else ":cancel_failed"))
+        g["finish_t"] = time.time()
+        if self._active == goal_id:
+            self._active = None
+        return self._terminal_fb(goal_id, g)
+
     def _converge(self, goal_id: str) -> Optional[dict]:
         """任务完成时统一收敛:读一次 getResult 映射终态、置 terminal、清 _active。幂等。
         未完成返回 None。"""
