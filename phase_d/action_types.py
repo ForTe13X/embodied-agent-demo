@@ -3,10 +3,14 @@
 设计要点(对照 docs/POSITIONING.md、RECOVERY_OWNERSHIP.md):
   · 动作表示 = relative end-effector delta(跨 embodiment 更好迁移,见 review §四):
     [dx, dy, dz, droll, dpitch, dyaw, gripper] —— 前 6 维相对当前位姿的增量,末维夹爪目标 0..1。
-  · **结构性保证**:控制器只接受 `SafeAction`,而 `SafeAction` 只能由 `SafetyShield.project()`
-    构造(`_authorized` 私有令牌)。policy 吐的是裸 `Action`,类型上就无法直接送到控制器——
-    "learned policy 绕不过确定性安全投影"是可核对的结构事实,不是口号(复刻 Phase B 的
-    no-velocity-interface 结构断言)。
+  · **类型级保证**:控制器只接受 `SafeAction`,而 `SafeAction` 需 `_authorized` 私有令牌构造,
+    正常路径上只有 `SafetyShield.project()` 会铸造它。policy 吐的是裸 `Action`,类型上就无法
+    直接送到控制器——沿 runtime 执行路径,"learned policy 绕不过确定性安全投影"成立。
+
+    **诚实边界(codex 评审,D1 待办)**:这是**同进程内的约定**,不是**不可绕过**的安全边界——
+    `from action_types import _SHIELD_TOKEN` 就能取到令牌并伪造 `SafeAction`。它挡得住"误用/
+    顺手绕过",挡不住蓄意绕过。真正不可绕的边界需要进程/能力隔离(如 shield 独立进程 + IPC,
+    或令牌不可从模块命名空间取得),属 D1 工作,**当前不冒充为已具备**。
 """
 from __future__ import annotations
 

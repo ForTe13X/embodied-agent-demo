@@ -33,16 +33,24 @@
   running/progress/fault,**不逐帧调 policy**(review §七)。
 - **一份日志贯穿两类 skill**:VLA runtime 的 `vla_skill` 事件(safety_clamped / emergency_stop /
   skill_succeeded 等)折进了和 Nav 事件同一份 append-only 日志 → 整条复合任务可回放、可审计。
-- **learned policy 仍绕不过安全投影**:unsafe 条件里 policy 想冲界,末端从未离开 workspace
-  (SafetyShield 的结构性保证,见 [safety_shield.py](safety_shield.py) + [test_safety_shield.py](test_safety_shield.py))。
+- **沿 runtime 执行路径,learned policy 绕不过安全投影**:unsafe 条件里 policy 想冲界,末端从未离开
+  workspace(见 [safety_shield.py](safety_shield.py) + [test_safety_shield.py](test_safety_shield.py))。
+  边界见下:这是**类型级同进程约定**,不是不可绕过的隔离。
 
 ## 诚实边界
 
 - **Nav 是 mock server**(真实 ROS 2 / Nav2 见 [Phase B/C](../phase_c/PHASE_C_RESULTS.md));D-2 证的是
   **skill 组合 + 恢复归属 + 共享审计**,不是又跑一遍真实 Nav2。把 mock adapter 换成 RclpyAdapter
   即在真实 Nav2 上跑同一条复合任务(接口不变,Phase B 已证可换)。
-- **VLA 是 mock policy + 运动学 sim**,不训练、不碰真机;后置校验是确定性 postcondition(非真 VLM)。
+- **VLA 是 mock policy + 运动学 sim**,不训练、不碰真机。
   价值在 runtime / 安全集成 / 可审计。详见 [docs/POSITIONING.md](../docs/POSITIONING.md) 与 [README](README.md)。
+- **"后置校验"目前名不副实(codex 评审,D1 待办)**:`composite_mission.py` 里
+  `manipulation_ok = skill["outcome"] == "succeeded"` 后即 emit `verified=True` ——
+  它**复用 skill 自 report 的成功**,**不是对末态的独立观测**(没有去查 sim 里方块是否真被抓起)。
+  真正的 postcheck 应独立读末态判定。**当前不冒充为独立校验。**
+- **集成契约尚未闭合**:`execute_vla_skill` 是**阻塞调用**(无外部 goal/feedback/cancel)、
+  `_SHIELD_TOKEN` 可 import 故类型边界**可绕过**、composite **未并入正式 LangGraph graph**、
+  无 ROS 2 `ExecuteVLASkill` Action。逐条见 [README 诚实边界](README.md)。
 
 ## 意义
 

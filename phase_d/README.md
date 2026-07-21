@@ -39,13 +39,21 @@ VLA 是挂在编排层下面的**一类 learned skill**,不是整个系统。它
 | stale(高延迟) | 否 | timeout | 0 | 4 | ✓ |
 | cancel | 否 | canceled | 0 | 0 | ✓ |
 
-**关键不变量:无论 policy 多离谱,末端永远在 workspace 内 —— policy 绕不过安全投影。**
+**关键不变量:无论 policy 多离谱,末端永远在 workspace 内 —— 沿 runtime 执行路径,policy 绕不过安全投影。**
 
 ## 诚实边界
 
 - **不是真 VLA**:mock policy 是确定性桩,不训练、不看图像;真实 VLA 换到 `predict_chunk` 同签名即可接。
 - **不是物理仿真**:运动学 sim,不模拟接触力/摩擦/碰撞动力学。
 - 价值在 **runtime / 安全集成 / 可审计**,不是操作物理或模型能力。详见 [docs/POSITIONING.md](../docs/POSITIONING.md)。
+- **集成契约尚未闭合(垂直切片,非完整契约)**——以下为 D1/D2 待办,**不冒充为已完成**:
+  - `execute_vla_skill` 在注册表里是**阻塞调用**(`await rt.execute(goal)`),**无外部 goal/feedback/cancel**,
+    与 `navigate_to` 的异步 goal-handle 契约**不对等**;真实 policy 还可能阻塞事件循环。
+  - `SafeAction` 的"结构性保证"是**同进程内约定**:`_SHIELD_TOKEN` 可被 `from action_types import _SHIELD_TOKEN`
+    取到并伪造 `SafeAction`,**不是不可绕过的安全边界**(上面那条不变量只在"policy 走 runtime 执行路径"下成立)。
+  - postcheck **复用 skill 自 report 的 success**,不是对末态的**独立观测**。
+  - composite 走独立壳子,**未并入正式 LangGraph graph**;无 ROS 2 `ExecuteVLASkill` Action。
+  - action/execution horizon 与 sensor freshness 语义待校正。
 
 ## Phase D-2:端到端复合任务(已完成)
 
@@ -67,7 +75,14 @@ VLA 是挂在编排层下面的**一类 learned skill**,不是整个系统。它
 
 完整结果与逐条解读:[PHASE_D_RESULTS.md](PHASE_D_RESULTS.md)。
 
-## 再下一步(需硬件,Phase E+)
+## 下一步 D1/D2(**不需硬件**,当前最大工程缺口)
+
+把上面"集成契约尚未闭合"逐条补上——这些**都不需要真机**,是可管理、可停止的 skill 边界:
+版本化 Policy Contract → `execute_vla_skill` 真正的异步 goal/feedback/cancel/result(+ ROS 2
+`ExecuteVLASkill` Action)→ 不可绕过的 shield 边界 + 独立 postcheck + horizon/freshness 语义 →
+composite 并入正式 LangGraph graph。
+
+## 再下一步(**需硬件**,Phase E+)
 
 真臂 + 遥操作数据 + SmolVLA/ACT 微调 + 真实闭环 eval + intervention 数据飞轮;真实 VLM 感知进
 控制闭环。属未来,不在当前范围(见 [docs/POSITIONING.md](../docs/POSITIONING.md) 路线图)。
