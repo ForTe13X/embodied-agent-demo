@@ -64,7 +64,8 @@ class VLASkillRuntime:
     def __init__(self, policy: MockVLAPolicy, shield: SafetyShield, sim: TabletopSim,
                  *, inference_latency_s: float = 0.0, clock: _Clock | None = None,
                  events: list | None = None, emit_fn=None,
-                 contract: PolicyContract | None = None):
+                 contract: PolicyContract | None = None,
+                 offload_inference: bool = True):
         # D1:装载期就校验 policy 声明的契约版本(不兼容立刻拒,而不是跑起来才炸)
         self.contract = contract or PolicyContract()
         self.contract.assert_policy_compatible(policy)
@@ -72,11 +73,14 @@ class VLASkillRuntime:
         self.shield = shield
         self.sim = sim
         self.inference_latency_s = inference_latency_s   # 模拟推理耗时(测 stale 用)
+        self.offload_inference = offload_inference       # 同步 policy 丢线程池,不阻塞事件循环
         self.clock = clock or _Clock()
         self.events = events if events is not None else []
         self.emit_fn = emit_fn      # 可选:把 skill 事件转发进共享事件日志(Phase D-2 编排集成)
         self._cancelled = False
         self._seq = 0
+        # 在飞进度:execute() 一开始就挂上,供 goal-handle 服务端在飞轮询 feedback(D1)
+        self.live: Optional[SkillResult] = None
 
     def cancel(self) -> None:
         self._cancelled = True
@@ -90,6 +94,11 @@ class VLASkillRuntime:
     async def _infer(self, goal: SkillGoal, obs: Observation):
         if self.inference_latency_s > 0:
             await asyncio.sleep(self.inference_latency_s)
+        if self.offload_inference:
+            # 真实 policy 的 predict_chunk 是同步、CPU/GPU 密集的第三方代码:直接在事件循环里调
+            # 会把整个控制环(含 cancel 响应、超时判定)一起卡住 —— 必须丢到线程池。
+            # mock policy 很快,offload 只是多一次线程往返,但契约上"不在环上跑外部代码"要一致。
+            return await asyncio.to_thread(self.policy.predict_chunk, obs, goal.mission_id)
         return self.policy.predict_chunk(obs, goal.mission_id)
 
     def _target_dist(self) -> float:
@@ -99,6 +108,7 @@ class VLASkillRuntime:
     async def execute(self, goal: SkillGoal) -> SkillResult:
         t0 = self.clock.now()
         res = SkillResult(success=False, terminal_reason="")
+        self.live = res                  # 在飞进度句柄(feedback 轮询读它)
         queue: list = []                 # [(Action, 依据的 obs seq, 依据的 obs 时刻)]
         inference_task: Optional[asyncio.Task] = None
         executed_from_chunk = 0          # 当前 chunk 已执行数(对照 contract.execution_horizon)
