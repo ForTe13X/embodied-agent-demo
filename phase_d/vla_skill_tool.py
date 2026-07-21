@@ -110,6 +110,22 @@ def register_vla_skill(registry: ToolRegistry, sim_factory: Callable[[], tuple],
                             retriable=True)
         return r
 
+    async def verify_skill_postcondition(p: SkillGoalIdIn) -> dict:
+        """【独立后置校验】回读 sim 末态判定,**不采信 skill 自报的 success**。
+        并返回 agrees_with_skill —— 自报与实测背离本身就是高价值审计信号。"""
+        sim = server.sim_of(p.skill_goal_id)
+        if sim is None:
+            raise ToolError("UNKNOWN_SKILL_GOAL", f"skill goal {p.skill_goal_id} 不存在")
+        r = server.result(p.skill_goal_id)
+        reported = bool(r and r.get("status") == "succeeded")
+        grasped = bool(sim.block.grasped)
+        return {"verified": grasped, "method": "independent_sim_readback",
+                "block_grasped": grasped, "skill_reported_success": reported,
+                "agrees_with_skill": grasped == reported}
+
+    registry.tools["verify_skill_postcondition"] = ToolSpec(
+        "verify_skill_postcondition", SkillGoalIdIn, verify_skill_postcondition,
+        idempotent=True, required_output_keys=("verified",))
     registry.tools["execute_vla_skill"] = ToolSpec(
         "execute_vla_skill", ExecuteVLASkillIn, execute_vla_skill,
         idempotent=False, required_output_keys=("skill_goal_id",))

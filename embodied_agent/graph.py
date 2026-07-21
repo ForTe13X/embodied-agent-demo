@@ -11,6 +11,8 @@ observer 的每个 tick 内部循环推进(而不是图级自环):水位检测(f
 """
 from __future__ import annotations
 
+import asyncio
+import time
 from typing import Optional, TypedDict
 
 from langgraph.graph import END, START, StateGraph
@@ -18,6 +20,7 @@ from langgraph.graph import END, START, StateGraph
 from .planner_rules import build_queue, enumerate_substitutes
 from .recovery import PRIORITY, RECOVERY_CHAINS, FaultClass, next_stage
 from .runtime import (
+    SKILL_POLL_PERIOD_S,
     MAX_GOAL_TICKS,
     MAX_WAIT_CHARGE_TICKS,
     RECURSION_LIMIT,
@@ -34,6 +37,10 @@ class AgentState(TypedDict, total=False):
     active_goal: Optional[str]
     goal_target: Optional[str]
     goal_started_tick: int
+    mission_queue: Optional[list[dict]]  # D2:显式复合任务队列(不给则由 intent 生成)
+    skill_watchdog_s: Optional[float]    # D2:skill 兜底看门狗(墙钟秒)
+    active_skill_goal: Optional[str]   # D2:在飞的 VLA skill goal 句柄(与 nav 同构)
+    skill_postcheck: Optional[dict]    # D2:独立后置校验证据(不采信 skill 自报)
     waiting_charge: bool
     fault: Optional[dict]           # {fclass, context}
     attempts: dict[str, int]        # 每类故障累计出现次数(升级用)
@@ -66,7 +73,8 @@ def build_graph(rt: Runtime):
             log.emit("planner", "queue_resumed", steps=queue)
             return {"queue": queue, "queue_idx": 0, "resume_queue": None,
                     "route": "exec"}
-        queue = build_queue(intent)
+        # D2:允许显式给一条复合任务队列(nav + vla_skill 混编),否则按 intent 生成巡检队列。
+        queue = state.get("mission_queue") or build_queue(intent)
         log.emit("planner", "plan_built", mission=intent.mission, steps=queue)
         return {
             "queue": queue, "queue_idx": 0, "resume_queue": None,
@@ -159,6 +167,21 @@ def build_graph(rt: Runtime):
             return {"queue_idx": i + 1, "anomalies_reported": reported,
                     "route": "exec"}
 
+        if kind == "vla_skill":
+            # D2:learned skill 与 nav 在【同一张图】里走同一模式——派发拿句柄,交给 observer 轮询。
+            # 编排层不逐帧调 policy,只见 executing/succeeded/failed(review §七)。
+            res = await reg.call("execute_vla_skill", {
+                "instruction": step["instruction"],
+                "skill_id": step.get("skill_id", "tabletop_pick"),
+                "timeout_s": step.get("timeout_s", 8.0)}, caller="executor")
+            if not res.ok:
+                return {"fault": _fault(FaultClass.SKILL_FAILED,
+                                        tool="execute_vla_skill",
+                                        code=res.error["code"], step_idx=i),
+                        "route": "except"}
+            return {"active_skill_goal": res.data["skill_goal_id"],
+                    "skill_started_tick": rt.clock.tick, "route": "observe"}
+
         if kind == "wait_charged":
             return {"waiting_charge": True, "route": "observe"}
 
@@ -167,6 +190,76 @@ def build_graph(rt: Runtime):
     # ---- observer ---------------------------------------------------------
 
     async def observer(state: AgentState) -> AgentState:
+        # D2:在飞 VLA skill 与 nav 同构地轮询(上层只见 executing/succeeded/failed)。
+        # 终态失败 → 按 code 归类上浮:安全停走 SKILL_UNSAFE(绝不重试),其余 SKILL_FAILED。
+        sid = state.get("active_skill_goal")
+        if sid:
+            poll_failures = 0
+            # skill runtime 跑在【真实时间】上,而 mock 世界是【虚拟 tick】。若用虚拟 tick 做看门狗,
+            # 观察者会在 skill 还没跑几步时就把虚拟预算烧光而误判超时 —— 故这里的兜底用墙钟,
+            # 且每轮让出一点真实时间给 skill 的控制环推进。skill 自身也有 timeout,这层只是兜底。
+            t_start = time.monotonic()
+            budget_s = float(state.get("skill_watchdog_s") or 30.0)
+            while True:
+                # 只让出真实时间给 skill 的控制环,**不**按轮询频率推进虚拟世界:
+                # 否则 5s 的 skill × 5ms 轮询 = 上千个虚拟 tick 的耗电,机器人会在操作中"电量耗尽"
+                # —— 那是把轮询频率当成了世界时间。mock 世界建模的是导航,不含操作能耗模型
+                # (与 battery 为 mock-only 的既有口径一致),故 skill 期间不推进世界时钟。
+                await asyncio.sleep(SKILL_POLL_PERIOD_S)
+                fb_res = await reg.call("get_skill_feedback", {"skill_goal_id": sid},
+                                        caller="observer", poll=True)
+                if not fb_res.ok:
+                    poll_failures += 1
+                    if poll_failures >= 3:
+                        return {"active_skill_goal": None,
+                                "fault": _fault(FaultClass.SKILL_FAILED,
+                                                tool="get_skill_feedback",
+                                                code="POLL_FAILED"),
+                                "route": "except"}
+                    continue
+                poll_failures = 0
+                if fb_res.data["status"] == "executing":
+                    if time.monotonic() - t_start > budget_s:
+                        log.emit("observer", "watchdog_triggered", kind="skill_timeout")
+                        await reg.call("cancel_skill", {"skill_goal_id": sid},
+                                       caller="observer")
+                        return {"active_skill_goal": None,
+                                "fault": _fault(FaultClass.SKILL_FAILED,
+                                                code="SKILL_WATCHDOG_TIMEOUT"),
+                                "route": "except"}
+                    continue
+
+                r = await reg.call("get_skill_result", {"skill_goal_id": sid},
+                                   caller="observer")
+                if not r.ok:
+                    return {"active_skill_goal": None,
+                            "fault": _fault(FaultClass.SKILL_FAILED,
+                                            tool="get_skill_result",
+                                            code=r.error["code"]),
+                            "route": "except"}
+                # 【独立后置校验】不采信 skill 自报:回读末态,并记录是否与自报一致
+                pc = await reg.call("verify_skill_postcondition", {"skill_goal_id": sid},
+                                    caller="observer")
+                evidence = pc.data if pc.ok else {"verified": False, "reason": "postcheck_unavailable"}
+                log.emit("postcheck", "verify_manipulation", **evidence)
+                if pc.ok and not evidence.get("agrees_with_skill", True):
+                    log.emit("postcheck", "verify_disagrees_with_skill", **evidence)
+
+                if r.data["status"] == "succeeded" and evidence.get("verified"):
+                    log.emit("observer", "step_completed",
+                             step={"kind": "vla_skill"}, steps=r.data.get("steps"))
+                    return {"active_skill_goal": None,
+                            "queue_idx": state["queue_idx"] + 1,
+                            "skill_postcheck": evidence, "route": "exec"}
+                fclass = (FaultClass.SKILL_UNSAFE
+                          if r.data.get("code") == "VLA_UNSAFE_STOP"
+                          else FaultClass.SKILL_FAILED)
+                return {"active_skill_goal": None, "skill_postcheck": evidence,
+                        "fault": _fault(fclass, code=r.data.get("code"),
+                                        reason=r.data.get("terminal_reason"),
+                                        verified=evidence.get("verified")),
+                        "route": "except"}
+
         if state.get("waiting_charge"):
             waited = 0
             while waited < MAX_WAIT_CHARGE_TICKS:
@@ -521,7 +614,10 @@ def build_graph(rt: Runtime):
     return g.compile()
 
 
-async def run_graph(rt: Runtime) -> dict:
+async def run_graph(rt: Runtime, mission_queue: Optional[list[dict]] = None) -> dict:
+    """mission_queue:D2 复合任务用(nav + vla_skill 混编)。不给则走 intent 生成的巡检队列
+    —— 90-run 走的正是后者,故本参数对既有评测完全中性。"""
     app = build_graph(rt)
-    final = await app.ainvoke({}, config={"recursion_limit": RECURSION_LIMIT})
+    initial: AgentState = {"mission_queue": mission_queue} if mission_queue else {}
+    final = await app.ainvoke(initial, config={"recursion_limit": RECURSION_LIMIT})
     return final
