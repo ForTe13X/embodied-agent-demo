@@ -24,6 +24,19 @@ def _rt(scenario="baseline"):
     return rt, server
 
 
+async def _poll_terminal(rt, sid, deadline_s=20.0):
+    """轮询到终态。用【墙钟上限】而不是固定迭代数 —— 迭代计数在机器负载下会假失败(flaky)。"""
+    loop = asyncio.get_event_loop()
+    t0 = loop.time()
+    while loop.time() - t0 < deadline_s:
+        fb = await rt.registry.call("get_skill_feedback", {"skill_goal_id": sid}, poll=True)
+        assert fb.ok, fb.error
+        if fb.data["status"] != "executing":
+            return fb.data
+        await asyncio.sleep(0.002)
+    raise AssertionError(f"skill {sid} 在 {deadline_s}s 内未到终态")
+
+
 def test_execute_returns_handle_immediately_without_blocking():
     """核心:execute 立即拿到 skill_goal_id,此时 skill 还没跑完(旧实现这里已经阻塞到终态)。"""
     rt, _ = _rt()
@@ -39,12 +52,8 @@ def test_execute_returns_handle_immediately_without_blocking():
         r = await rt.registry.call("get_skill_result", {"skill_goal_id": sid})
         assert not r.ok and r.error["code"] == "SKILL_NOT_FINISHED"
         # 收尾:轮询到终态
-        for _ in range(4000):
-            fb = await rt.registry.call("get_skill_feedback", {"skill_goal_id": sid}, poll=True)
-            if fb.data["status"] != "executing":
-                break
-            await asyncio.sleep(0.002)
-        assert fb.data["status"] == "succeeded"
+        term = await _poll_terminal(rt, sid)
+        assert term["status"] == "succeeded"
 
     asyncio.run(go())
 
@@ -58,11 +67,7 @@ def test_cancel_in_flight_terminates_as_canceled():
         await asyncio.sleep(0.01)                     # 让它跑几步
         c = await rt.registry.call("cancel_skill", {"skill_goal_id": sid})
         assert c.ok and c.data["canceled"] is True
-        for _ in range(4000):                          # 等 runtime 收敛
-            fb = await rt.registry.call("get_skill_feedback", {"skill_goal_id": sid}, poll=True)
-            if fb.data["status"] != "executing":
-                break
-            await asyncio.sleep(0.002)
+        await _poll_terminal(rt, sid)                  # 等 runtime 收敛
         r = await rt.registry.call("get_skill_result", {"skill_goal_id": sid})
         assert r.ok and r.data["status"] == "failed"
         assert r.data["terminal_reason"] == "canceled"
@@ -77,11 +82,7 @@ def test_cancel_after_terminal_returns_false():
 
     async def go():
         sid = (await rt.registry.call("execute_vla_skill", ARGS)).data["skill_goal_id"]
-        for _ in range(4000):
-            fb = await rt.registry.call("get_skill_feedback", {"skill_goal_id": sid}, poll=True)
-            if fb.data["status"] != "executing":
-                break
-            await asyncio.sleep(0.002)
+        await _poll_terminal(rt, sid)
         c = await rt.registry.call("cancel_skill", {"skill_goal_id": sid})
         assert c.ok and c.data["canceled"] is False    # 已终态 → 取消无效(与 nav 语义一致)
 
@@ -115,11 +116,7 @@ def test_unsafe_scenario_surfaces_unsafe_stop_code():
 
     async def go():
         sid = (await rt.registry.call("execute_vla_skill", ARGS)).data["skill_goal_id"]
-        for _ in range(4000):
-            fb = await rt.registry.call("get_skill_feedback", {"skill_goal_id": sid}, poll=True)
-            if fb.data["status"] != "executing":
-                break
-            await asyncio.sleep(0.002)
+        await _poll_terminal(rt, sid)
         r = await rt.registry.call("get_skill_result", {"skill_goal_id": sid})
         assert r.ok and r.data["status"] == "failed"
         assert r.data["code"] == "VLA_UNSAFE_STOP"

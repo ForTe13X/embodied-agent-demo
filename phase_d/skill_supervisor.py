@@ -56,8 +56,12 @@ async def run_skill_supervised(registry: ToolRegistry, args: dict, *,
                                poll_timeout_s: float = 30.0) -> dict:
     log = registry.log
     last_code = None
+    last_sid = None
     for attempt in range(max_retries + 1):
         r = await _run_once(registry, args, poll_timeout_s=poll_timeout_s)
+        # skill_goal_id 必须在【所有】返回路径上带出去 —— 独立 postcheck 要靠它回读末态,
+        # 而失败路径恰恰是最需要独立验证的地方(不能只在成功时才可验证)。
+        last_sid = r.get("skill_goal_id", last_sid)
         if r["status"] == "succeeded":
             log.emit("skill_supervisor", "skill_ok", attempt=attempt,
                      safety_interventions=r.get("safety_interventions"),
@@ -67,10 +71,12 @@ async def run_skill_supervised(registry: ToolRegistry, args: dict, *,
         if last_code == "VLA_UNSAFE_STOP":            # 安全:不重试,立即上浮
             log.emit("skill_supervisor", "escalate_unsafe", attempt=attempt,
                      code=last_code, reason=r.get("terminal_reason"))
-            return {"outcome": "aborted_unsafe", "attempts": attempt + 1, "code": last_code}
+            return {"outcome": "aborted_unsafe", "attempts": attempt + 1,
+                    "code": last_code, "skill_goal_id": last_sid}
         if r.get("retriable") and attempt < max_retries:
             log.emit("skill_supervisor", "retry", attempt=attempt, code=last_code)
             continue
         break
     log.emit("skill_supervisor", "escalate_exhausted", attempts=max_retries + 1, code=last_code)
-    return {"outcome": "escalated", "attempts": max_retries + 1, "code": last_code}
+    return {"outcome": "escalated", "attempts": max_retries + 1,
+            "code": last_code, "skill_goal_id": last_sid}

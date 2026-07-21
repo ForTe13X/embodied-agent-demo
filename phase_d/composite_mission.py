@@ -43,6 +43,27 @@ async def _dispatch_and_wait(rt: Runtime, tool: str, args: dict, max_ticks: int 
     return "timeout"
 
 
+def _independent_postcheck(server, skill: dict) -> tuple[bool, dict]:
+    """【独立后置校验】直接读末态,**不复用 skill 自报的 success**(codex 评审)。
+
+    旧实现是 `manipulation_ok = skill["outcome"] == "succeeded"` 然后 emit verified=True ——
+    一个恒真的同义反复:skill 说成功就"校验通过"。真正要防的恰恰是"skill 自报成功但物体
+    其实没抓住"这类失败模式,而那种情况下自报永远查不出来。
+    这里改为回读 sim 中方块的实际状态,并把"是否与 skill 自报一致"一并写进审计日志——
+    两者不一致本身就是高价值信号。
+    """
+    sid = skill.get("skill_goal_id")
+    sim = server.sim_of(sid) if sid else None
+    reported = skill.get("outcome") == "succeeded"
+    if sim is None:
+        return False, {"method": "independent_sim_readback", "reason": "no_sim_handle",
+                       "skill_reported_success": reported}
+    grasped = bool(sim.block.grasped)
+    return grasped, {"method": "independent_sim_readback", "block_grasped": grasped,
+                     "skill_reported_success": reported,
+                     "agrees_with_skill": grasped == reported}
+
+
 def _classify(manipulation_ok: bool, at_dock: bool) -> str:
     if at_dock and manipulation_ok:
         return "completed_full"
@@ -54,7 +75,7 @@ def _classify(manipulation_ok: bool, at_dock: bool) -> str:
 async def run_composite(condition: str, scenario: str, log_path: Path | None = None) -> dict:
     cfg = RunConfig(condition=condition, seed=0, fault_specs=[], gates_on=True, log_path=log_path)
     rt = build_runtime(cfg)
-    register_vla_skill(rt.registry, make_sim_factory(scenario))
+    server = register_vla_skill(rt.registry, make_sim_factory(scenario))
     log = rt.event_log
     log.emit("mission_planner", "composite_plan",
              steps=["navigate_to:a1", "execute_vla_skill", "verify_manipulation", "return_to_dock"],
@@ -69,13 +90,12 @@ async def run_composite(condition: str, scenario: str, log_path: Path | None = N
     skill = await run_skill_supervised(
         rt.registry, {"instruction": "pick up the red block",
                       "skill_id": "tabletop_pick", "timeout_s": 8.0})
-    manipulation_ok = skill["outcome"] == "succeeded"
-
-    # 3) 后置校验(mock VLM postcheck:此处等价于抓取后置条件成立与否)
-    if manipulation_ok:
-        log.emit("postcheck", "verify_manipulation", verified=True)
-    else:
-        log.emit("postcheck", "verify_skipped", reason=skill.get("code") or skill["outcome"])
+    # 3) 【独立后置校验】回读 sim 末态判定,不采信 skill 自报(见 _independent_postcheck)
+    manipulation_ok, evidence = _independent_postcheck(server, skill)
+    log.emit("postcheck", "verify_manipulation", verified=manipulation_ok, **evidence)
+    if not evidence.get("agrees_with_skill", True):
+        # 自报与实测不一致:审计层面的高价值信号(skill 说成了但物体没抓住,或反之)
+        log.emit("postcheck", "verify_disagrees_with_skill", **evidence)
 
     # 4) 无论操作成败,都安全归坞
     navd = await _dispatch_and_wait(rt, "return_to_dock", {})
