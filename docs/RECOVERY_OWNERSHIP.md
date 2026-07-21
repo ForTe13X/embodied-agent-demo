@@ -42,13 +42,19 @@ Phase C 把同一套编排从 mock 底盘搬到真实 ROS 2 / Nav2,`nav_blocked`
 | **过境访问违规**(轨迹闯入未授权受限/禁入区) | **运行期访问围栏(adapter 内置,注册表之下)** | 盯实际位置流 → 踏入即取消目标、安全停、上浮 `transit_violation` | 🟡 mock 强制端到端实测 + 纯逻辑单测;真实 `RclpyAdapter` 同源接入,复验需容器(F-01)。彻底预防(costmap keepout)仍属路线图 |
 | 传感器降级 | 编排层 | `skip_step_degraded` → `pause_and_escalate` | 🟡 mock-only |
 | 工具超时 / 畸形 | 注册表 + 编排层 | 幂等重试 → 熔断 → `failure_report_and_degrade` | 🟡 mock-only |
-| **抓取姿态微调 / 局部视觉纠正** | **VLA / manipulation skill** | policy 闭环内自纠(chunk 重预测) | ⬜ 路线图(Phase D 仿真 runtime) |
-| **连续抓取失败** | **Skill Supervisor(编排层之下、skill 之上)** | 重观测 → 重试 N 次 → 上浮编排层 | ⬜ 路线图 |
-| **电机过流 / 碰撞 / 关节超限** | **独立硬件安全 supervisor** | action projection / 急停,**独立于模型** | ⬜ 路线图(局限 #7) |
+| **抓取姿态微调**(闭环重预测) | **VLA / manipulation skill** | policy 闭环内自纠(chunk 重预测、stale chunk 丢弃) | 🟡 Phase D 仿真已实现([`vla_skill_runtime.py`](../phase_d/vla_skill_runtime.py))。**边界**:mock policy + 运动学 sim;**局部视觉纠正仍 ⬜**(无相机/无真实视觉) |
+| **连续抓取失败** | **Skill Supervisor(编排层之下、skill 之上)** | 重试 N 次 → 上浮编排层;安全停**绝不重试**直接上浮 | 🟡 Phase D 仿真已实现([`skill_supervisor.py`](../phase_d/skill_supervisor.py)) |
+| **越界 / NaN / 荒谬幅度动作** | **独立 Safety Shield(确定性,独立于模型)** | action projection(workspace/限幅/夹爪)+ `must_stop` | 🟡 Phase D 仿真已实现([`safety_shield.py`](../phase_d/safety_shield.py)) |
+| **电机过流 / 碰撞 / 关节超限** | **独立硬件安全 supervisor** | 急停,**独立于模型** | ⬜ 路线图(需真实硬件量:电流/力矩/碰撞检测;局限 #7) |
 
-> 现状小结:本 repo 已经实测的是**上两层**(导航层 ⇄ 编排层)的归属划分,并且证明了它随底盘
-> 正确切换。下三行(VLA skill / Skill Supervisor / 硬件安全)是 learned-skill 接入后的归属,
-> 属路线图,尚未实现——**如实标注,不冒充。**
+> 现状小结:已实测的是**上两层**(导航层 ⇄ 编排层)的归属划分,并证明它随底盘正确切换。
+> **learned-skill 三层(VLA 闭环自纠 / Skill Supervisor / Safety Shield)已在 Phase D 纯仿真落地
+> (🟡)**——mock policy + 运动学 sim,不训练、不碰真机。**仍 ⬜ 的是**:真实视觉纠正、真实硬件安全量。
+>
+> **诚实标注(integration contract 尚未闭合)**:Phase D 目前是**垂直切片**,不是完整集成契约——
+> `execute_vla_skill` 在注册表里是**阻塞调用**(无外部 goal/feedback/cancel)、`_SHIELD_TOKEN` 可 import
+> 因而结构边界可绕、postcheck 复用 skill 自report 的 success、composite 未并入正式 LangGraph graph、
+> 无 ROS 2 `ExecuteVLASkill` Action。这些是 D1/D2 的工作,**不冒充为已完成**。
 
 ## 3. 反模式(明确禁止)
 

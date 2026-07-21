@@ -55,7 +55,7 @@ quadrantChart
 | Phase A(本仓库) | mock 底座上全闭环 + 90 条预注册评测 | ✅ 已完成——先证明编排层本身站得住 |
 | Phase B | 换 rclpy adapter 接真实 ROS 2 / Nav2(容器 + loopback_sim),故障用 keepout 注入 | ✅ 已完成,实测见 [phase_b/FINDINGS.md](../phase_b/FINDINGS.md) |
 | Phase C | 预注册故障注入评测从 mock 搬到真实 Nav2(可移植条件),mock⇄real 对比 | ✅ 已完成,见 [phase_c/PHASE_C_RESULTS.md](../phase_c/PHASE_C_RESULTS.md) |
-| Phase D(纯仿真) | `execute_vla_skill` + 异步 action-chunk runtime + **独立 Safety Shield** + mock VLA policy;把"安全监管一个 learned policy"接进现有 registry + 共享事件日志;端到端复合任务(导航→VLA 抓取→校验→归坞)+ Skill Supervisor 恢复归属 | ✅ 已完成,见 [phase_d/README.md](../phase_d/README.md) 与 [phase_d/PHASE_D_RESULTS.md](../phase_d/PHASE_D_RESULTS.md)(18 项测试全过)。诚实边界:mock policy + 运动学 sim,非真 VLA/非物理 |
+| Phase D(纯仿真) | `execute_vla_skill` + 异步 action-chunk runtime + **独立 Safety Shield** + mock VLA policy;把"安全监管一个 learned policy"接进现有 registry + 共享事件日志;端到端复合任务(导航→VLA 抓取→校验→归坞)+ Skill Supervisor 恢复归属 | ✅ 已完成,见 [phase_d/README.md](../phase_d/README.md) 与 [phase_d/PHASE_D_RESULTS.md](../phase_d/PHASE_D_RESULTS.md)(18 项测试全过)。诚实边界:mock policy + 运动学 sim,非真 VLA/非物理;**且为垂直切片非完整集成契约**——skill 为阻塞调用(无外部 goal/feedback/cancel)、shield 令牌可 import 绕过、postcheck 复用 skill success、composite 未并入正式 LangGraph graph(D1/D2 待办,不需硬件) |
 | Phase E+(需硬件) | 真臂 + 遥操作数据 + SmolVLA/ACT 微调 + 真实闭环 eval + intervention 数据飞轮;真实 VLM 感知进控制闭环;跨 run 记忆作为显式实验条件 | 需要真机械臂 / GPU / 相机,不在当前范围;如实标注为未来 |
 
 ## 6. 已知限制
