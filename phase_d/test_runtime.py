@@ -48,7 +48,12 @@ def test_stale_chunks_are_dropped():
     rt, events = _make(latency=0.05)
     res = asyncio.run(rt.execute(SkillGoal("m3", "pick", timeout_s=0.3)))
     assert res.stale_drops >= 1
-    assert any(e["event_type"] == "chunk_dropped_stale" for e in events)
+    # D1:过期判定统一走版本化契约 —— 事件为 chunk_rejected + code=OBSERVATION_STALE
+    # (旧事件名 chunk_dropped_stale 已并入契约校验的统一拒绝路径)
+    stale_rejects = [e for e in events
+                     if e["event_type"] == "chunk_rejected"
+                     and e["payload"].get("code") == "OBSERVATION_STALE"]
+    assert stale_rejects, f"应有 OBSERVATION_STALE 拒绝事件,实得 {[e['event_type'] for e in events]}"
     assert res.success is False          # 一直拿不到新鲜 chunk → hold 到超时
 
 

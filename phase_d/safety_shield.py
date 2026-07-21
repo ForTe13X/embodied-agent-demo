@@ -17,7 +17,8 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass, field
 
-from action_types import Action, EEState, SafeAction, _mint_safe
+from action_types import (Action, EEState, SafeAction, _mint_safe,
+                          _register_shield_token)
 
 
 @dataclass(frozen=True)
@@ -71,11 +72,12 @@ def _norm3(v) -> float:
 class SafetyShield:
     def __init__(self, config: ShieldConfig | None = None):
         self.cfg = config or ShieldConfig()
+        self.__token = _register_shield_token()   # 本实例专属铸造令牌(D1:不再是模块常量)
 
     def project(self, action: Action, state: EEState) -> tuple[SafeAction, ProjectionInfo]:
         cfg = self.cfg
         info = ProjectionInfo()
-        hold = _mint_safe((0.0, 0.0, 0.0, 0.0, 0.0, 0.0), state.gripper)  # must_stop 时保持
+        hold = _mint_safe((0.0, 0.0, 0.0, 0.0, 0.0, 0.0), state.gripper, self.__token)  # must_stop 时保持
 
         # 1) 非有限动作 → 立即停(绝不把 NaN 送控制器)
         if not action.is_finite():
@@ -132,4 +134,4 @@ class SafetyShield:
             + abs(safe_delta[4] - action.delta[4])
             + abs(safe_delta[5] - action.delta[5])
             + abs(g - action.gripper))
-        return _mint_safe(safe_delta, g), info
+        return _mint_safe(safe_delta, g, self.__token), info

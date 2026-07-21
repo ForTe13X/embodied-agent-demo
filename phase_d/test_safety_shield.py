@@ -9,7 +9,7 @@ import sys
 import pytest
 
 sys.path.insert(0, os.path.dirname(__file__))
-from action_types import Action, EEState, Observation, SafeAction, _SHIELD_TOKEN  # noqa: E402
+from action_types import Action, EEState, Observation, SafeAction  # noqa: E402
 from mock_vla_policy import MockVLAPolicy, PolicyConfig  # noqa: E402
 from safety_shield import SafetyShield, ShieldConfig  # noqa: E402
 from tabletop_sim import TabletopSim  # noqa: E402
@@ -44,13 +44,29 @@ def _rollout(policy, shield, sim, steps=200):
     return stats
 
 
-# ---- 1. 结构性保证:SafeAction 只能由 shield 铸造 ----
+# ---- 1. 类型级保证:SafeAction 只能由 shield 铸造 ----
 
 def test_safeaction_cannot_be_constructed_directly():
     with pytest.raises(PermissionError):
         SafeAction((0, 0, 0, 0, 0, 0), 0.0)                    # 无令牌
     with pytest.raises(PermissionError):
         SafeAction((0, 0, 0, 0, 0, 0), 0.0, object())          # 错令牌
+
+
+def test_module_exports_no_constant_shield_token():
+    """D1 回归:旧实现导出模块级 `_SHIELD_TOKEN`,`from action_types import _SHIELD_TOKEN`
+    一行就能伪造 SafeAction(codex 评审:'结构性保证'名不副实)。现不得再导出常量令牌。
+    诚实边界:这不等于同进程不可绕过 —— 真正不可绕需要进程隔离(见 action_types 顶注)。"""
+    import action_types
+    assert not hasattr(action_types, "_SHIELD_TOKEN"), \
+        "不得再导出模块级常量令牌(一行 import 即可伪造)"
+
+
+def test_token_from_one_shield_is_not_reusable_as_plain_object():
+    """令牌必须是登记过的 _ShieldToken 实例;任意对象(含 dataclass 字段默认 None)都拒。"""
+    for bad in (None, object(), "token", 123):
+        with pytest.raises(PermissionError):
+            SafeAction((0, 0, 0, 0, 0, 0), 0.0, bad)
 
 
 def test_controller_rejects_raw_action():

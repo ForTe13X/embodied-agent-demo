@@ -68,3 +68,39 @@ def test_all_conditions_return_to_dock_safely(tmp_path):
 if __name__ == "__main__":
     import pytest
     sys.exit(pytest.main([__file__, "-q"]))
+
+
+# ---- D1:后置校验必须是【独立观测】,不是复用 skill 自报 ----
+
+def _postcheck(events):
+    ev = [e for e in events if e["event_type"] == "verify_manipulation"]
+    assert ev, "应有 verify_manipulation 事件"
+    return ev[-1]["payload"]
+
+
+def test_postcheck_is_independent_sim_readback_baseline(tmp_path):
+    """baseline:校验依据必须是回读 sim 的 block_grasped,而不是 skill 的 outcome。"""
+    _, events = _run("c_baseline", "baseline", tmp_path)
+    p = _postcheck(events)
+    assert p["method"] == "independent_sim_readback"
+    assert p["block_grasped"] is True          # 独立观测:方块确实被抓住
+    assert p["verified"] is True
+    assert p["agrees_with_skill"] is True      # 本例自报与实测一致
+
+
+def test_postcheck_independently_reports_not_grasped_on_unsafe(tmp_path):
+    """unsafe:安全停后方块并未抓住 —— 独立观测据此判不通过(而非因为 skill 说失败)。"""
+    _, events = _run("c_unsafe", "unsafe", tmp_path)
+    p = _postcheck(events)
+    assert p["method"] == "independent_sim_readback"
+    assert p["block_grasped"] is False         # 独立观测:确实没抓住
+    assert p["verified"] is False
+    assert p["skill_reported_success"] is False
+    assert p["agrees_with_skill"] is True
+
+
+def test_postcheck_records_disagreement_field(tmp_path):
+    """契约要求:证据里必须带 agrees_with_skill —— 自报与实测背离时可被审计发现。"""
+    _, events = _run("c_baseline", "baseline", tmp_path)
+    p = _postcheck(events)
+    assert "agrees_with_skill" in p and "skill_reported_success" in p
