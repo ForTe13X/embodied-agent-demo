@@ -22,10 +22,10 @@ from typing import Optional
 
 from action_types import Observation
 from mock_vla_policy import MockVLAPolicy
+from policy_contract import ContractViolation, PolicyContract
 from safety_shield import SafetyShield
 from tabletop_sim import TabletopSim
 
-STALE_TOLERANCE = 2          # chunk 基于的 obs 比当前落后超过此值 = 过期
 CONTROLLER_PERIOD_S = 0.01   # 执行步周期(sim 里就是循环节流)
 NO_PROGRESS_STEPS = 40       # 连续这么多步不接近目标 = 无进展
 
@@ -36,7 +36,10 @@ class SkillGoal:
     instruction: str
     skill_id: str = "tabletop_pick"
     timeout_s: float = 8.0
-    execution_horizon: int = 3   # queue 低于此值就提前推理
+    # 注意:这是【补片阈值】——queue 低于此值就提前发下一次推理(与执行并行)。
+    # 它**不是** execution horizon(那是"一批最多执行几个"的安全语义,现由 PolicyContract 定义)。
+    # 旧代码把这个字段叫 execution_horizon,与真实含义相反,已按 D1 契约更名(codex 评审)。
+    refill_threshold: int = 3
 
 
 @dataclass
@@ -60,7 +63,11 @@ class _Clock:
 class VLASkillRuntime:
     def __init__(self, policy: MockVLAPolicy, shield: SafetyShield, sim: TabletopSim,
                  *, inference_latency_s: float = 0.0, clock: _Clock | None = None,
-                 events: list | None = None, emit_fn=None):
+                 events: list | None = None, emit_fn=None,
+                 contract: PolicyContract | None = None):
+        # D1:装载期就校验 policy 声明的契约版本(不兼容立刻拒,而不是跑起来才炸)
+        self.contract = contract or PolicyContract()
+        self.contract.assert_policy_compatible(policy)
         self.policy = policy
         self.shield = shield
         self.sim = sim
@@ -92,8 +99,10 @@ class VLASkillRuntime:
     async def execute(self, goal: SkillGoal) -> SkillResult:
         t0 = self.clock.now()
         res = SkillResult(success=False, terminal_reason="")
-        queue: list = []
+        queue: list = []                 # [(Action, 依据的 obs seq, 依据的 obs 时刻)]
         inference_task: Optional[asyncio.Task] = None
+        executed_from_chunk = 0          # 当前 chunk 已执行数(对照 contract.execution_horizon)
+        infer_obs_t = t0                 # 在飞推理所依据的观测时刻
         best_dist = None
         no_progress = 0
         self._emit("skill_started", mission_id=goal.mission_id, instruction=goal.instruction)
@@ -115,23 +124,31 @@ class VLASkillRuntime:
             self._seq += 1
             obs = Observation(seq=self._seq, t=self.clock.now(), ee=self.sim.ee)
 
-            # 1) queue 快空 → 提前发下一次推理(与执行并行)
-            if len(queue) < goal.execution_horizon and inference_task is None:
+            # 1) queue 快空 → 提前发下一次推理(与执行并行)。记住这次推理【依据的观测时刻】,
+            #    供后续逐动作新鲜度判定(chunk 只带 seq,时间维度由这里补齐)。
+            if len(queue) < goal.refill_threshold and inference_task is None:
+                infer_obs_t = obs.t
                 inference_task = asyncio.create_task(self._infer(goal, obs))
                 res.inference_calls += 1
 
-            # 2) 推理完成 → 校验是否过期,过期丢弃
+            # 2) 推理完成 → 按【版本化契约】校验(任务归属/长度/形状/chunk 级新鲜度);违约整块丢弃
             if inference_task is not None and inference_task.done():
                 chunk = inference_task.result()
                 inference_task = None
-                stale = (chunk.mission_id != goal.mission_id
-                         or chunk.observation_seq < self._seq - STALE_TOLERANCE)
-                if stale:
+                try:
+                    self.contract.validate_chunk(
+                        chunk, current_seq=self._seq, now=self.clock.now(),
+                        mission_id=goal.mission_id)
+                except ContractViolation as e:
                     res.stale_drops += 1
-                    self._emit("chunk_dropped_stale", based_on=chunk.observation_seq, now=self._seq)
+                    self._emit("chunk_rejected", code=e.code, detail=e.message,
+                               based_on=getattr(chunk, "observation_seq", None), now=self._seq)
                 else:
-                    queue.extend(chunk.actions)
-                    self._emit("chunk_accepted", n=len(chunk.actions), based_on=chunk.observation_seq)
+                    # 每个动作都带上它所依据的观测(seq + 时刻)→ 执行时可【逐动作】判新鲜度
+                    queue.extend((a, chunk.observation_seq, infer_obs_t) for a in chunk.actions)
+                    executed_from_chunk = 0
+                    self._emit("chunk_accepted", n=len(chunk.actions),
+                               based_on=chunk.observation_seq)
 
             # 3) queue 空 → hold,绝不复用旧动作
             if not queue:
@@ -140,8 +157,33 @@ class VLASkillRuntime:
                 await asyncio.sleep(CONTROLLER_PERIOD_S)
                 continue
 
-            # 4) 取一个动作,过 shield
-            raw = queue.pop(0)
+            # 4) 【执行边界】:一批最多执行 execution_horizon 个,之后必须换新 chunk
+            #    (旧代码没有这条 —— chunk 一旦接收就会一直执行到队列空)
+            if executed_from_chunk >= self.contract.execution_horizon:
+                dropped = len(queue)
+                queue.clear()
+                self._emit("chunk_exhausted_horizon", dropped=dropped,
+                           execution_horizon=self.contract.execution_horizon)
+                self.sim.hold_position()
+                await asyncio.sleep(CONTROLLER_PERIOD_S)
+                continue
+
+            # 5) 【逐动作新鲜度】:动作所依据的观测过期 → 丢弃该 chunk 剩余全部动作
+            #    (同一 chunk 的动作依据同一观测,一个陈旧则其余同样陈旧)
+            raw, src_seq, src_t = queue[0]
+            if not self.contract.is_executable(src_seq, current_seq=self._seq):
+                dropped = len(queue)
+                queue.clear()
+                res.stale_drops += 1
+                self._emit("actions_dropped_stale", dropped=dropped,
+                           based_on=src_seq, now=self._seq)
+                self.sim.hold_position()
+                await asyncio.sleep(CONTROLLER_PERIOD_S)
+                continue
+
+            # 6) 取该动作,过 shield
+            queue.pop(0)
+            executed_from_chunk += 1
             safe, info = self.shield.project(raw, self.sim.ee)
             if info.any_clamp:
                 res.safety_interventions += 1
@@ -153,18 +195,18 @@ class VLASkillRuntime:
                 self._emit("emergency_stop", reason=info.reason)
                 break
 
-            # 5) 送控制器(唯一执行入口,只收 SafeAction)
+            # 7) 送控制器(唯一执行入口,只收 SafeAction)
             self.sim.send(safe)
             res.steps += 1
 
-            # 6) 到达后置条件?(玩具:抓住方块)
+            # 8) 到达后置条件?(玩具:抓住方块)
             if self.sim.block.grasped:
                 res.success = True
                 res.terminal_reason = "grasped"
                 self._emit("skill_succeeded", steps=res.steps)
                 break
 
-            # 7) 无进展兜底
+            # 9) 无进展兜底
             d = self._target_dist()
             if best_dist is None or d < best_dist - 1e-4:
                 best_dist = d

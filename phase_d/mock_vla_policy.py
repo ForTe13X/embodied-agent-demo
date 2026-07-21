@@ -13,6 +13,7 @@ import random
 from dataclasses import dataclass
 
 from action_types import Action, ChunkResult, Observation
+from policy_contract import POLICY_CONTRACT_VERSION
 
 
 @dataclass
@@ -31,6 +32,10 @@ class PolicyConfig:
 
 
 class MockVLAPolicy:
+    # D1 版本化 Policy Contract:policy 必须声明它遵循的契约版本,runtime 装载期校验 major 相符。
+    # 真实 VLA 接入时同样要声明(权重换代 = 可能换契约,不能只靠"跑起来看")。
+    contract_version = POLICY_CONTRACT_VERSION
+
     def __init__(self, config: PolicyConfig | None = None, seed: int = 0):
         self.cfg = config or PolicyConfig()
         self.rng = random.Random(seed)
