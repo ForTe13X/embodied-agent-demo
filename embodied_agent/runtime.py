@@ -25,6 +25,7 @@ from .registry import ToolRegistry
 from .safety import SafetyMonitor
 from .world import World, default_map
 
+SKILL_POLL_PERIOD_S = 0.005   # D2:skill 轮询让出的真实时间(skill runtime 是实时的)
 STAGNATION_THRESHOLD_TICKS = 6   # feedback 停滞水位(编排层检测,非 server 自报)
 MAX_GOAL_TICKS = 120             # 单目标兜底超时
 MAX_WAIT_CHARGE_TICKS = 120
