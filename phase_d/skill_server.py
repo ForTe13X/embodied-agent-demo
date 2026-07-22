@@ -51,6 +51,8 @@ class SkillServer:
     def send_goal(self, goal: SkillGoal) -> dict:
         """立即返回 skill_goal_id;skill 在后台 asyncio.Task 里跑,不阻塞调用方。"""
         if self._active is not None:
+            self._reap(self._active, self._handles[self._active])   # 兜底:进门先收尸
+        if self._active is not None:
             return {"error": "busy", "active_goal": self._active}
         self._seq += 1
         sid = f"skill-{self._seq}"
@@ -59,6 +61,11 @@ class SkillServer:
         self._handles[sid] = {"rt": rt, "task": task, "goal": goal,
                               "terminal": None, "cancel_requested": False}
         self._active = sid
+        # 在飞锁必须由【任务自身完成】释放,不能依赖调用方"记得再轮询一次"。
+        # 复审实测:watchdog/poll_failures 取消后不再轮询 → _reap 永不触发 → _active 永久占用
+        # → 后续所有 skill goal 恒 SKILL_BUSY(被静默降级跳过)。done-callback 是唯一
+        # 不依赖调用方礼貌的释放点。
+        task.add_done_callback(lambda _t, s=sid: self._reap(s, self._handles[s]))
         return {"skill_goal_id": sid}
 
     def feedback(self, sid: str) -> Optional[dict]:

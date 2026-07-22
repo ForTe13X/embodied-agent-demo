@@ -135,3 +135,43 @@ def test_schema_forbids_unknown_param():
         assert not res.ok and res.error["code"] == "SCHEMA_VIOLATION"
 
     asyncio.run(go())
+
+
+# ---- 复审(D1/D2 post-merge review)回归:实测复现过的缺陷 ----
+
+def test_active_lock_released_even_if_caller_never_polls_again():
+    """在飞锁必须由任务自身释放。复审实测:watchdog/poll 失败后 cancel 就不再轮询 →
+    _reap 永不触发 → _active 永久占用 → 后续所有 skill goal 恒 SKILL_BUSY(被静默跳过)。"""
+    rt, server = _rt()
+
+    async def go():
+        sid = (await rt.registry.call("execute_vla_skill", ARGS)).data["skill_goal_id"]
+        await rt.registry.call("cancel_skill", {"skill_goal_id": sid})
+        # 模拟调用方就此撒手:不再 feedback/result
+        for _ in range(200):
+            await asyncio.sleep(0.005)
+            if server._active is None:
+                break
+        assert server._active is None, "任务完成后在飞锁必须自动释放(不依赖调用方再轮询)"
+        second = await rt.registry.call("execute_vla_skill", ARGS)
+        assert second.ok, f"锁泄漏导致后续 skill 被拒:{second.error}"
+
+    asyncio.run(go())
+
+
+def test_inflight_result_polls_do_not_trip_circuit_breaker():
+    """在飞取 result 是调用方【时序】问题,不是工具故障 —— 不得把熔断计数打开,
+    否则后续连真正的终态都取不到(复审实测:2 次在飞轮询即熔断)。"""
+    rt, _ = _rt()
+
+    async def go():
+        sid = (await rt.registry.call("execute_vla_skill", ARGS)).data["skill_goal_id"]
+        for _ in range(4):
+            r = await rt.registry.call("get_skill_result", {"skill_goal_id": sid})
+            assert r.error["code"] == "SKILL_NOT_FINISHED", r.error
+        await _poll_terminal(rt, sid)
+        final = await rt.registry.call("get_skill_result", {"skill_goal_id": sid})
+        assert final.ok, f"在飞轮询后仍必须能取到终态,实得 {final.error}"
+        assert final.data["status"] == "succeeded"
+
+    asyncio.run(go())

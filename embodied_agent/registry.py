@@ -83,11 +83,17 @@ class ToolSpec:
 
 
 class ToolError(Exception):
-    def __init__(self, code: str, message: str = "", retriable: bool = False):
+    """counts_circuit=False:调用方【时序/用法】错误(如"目标还没跑完就来取结果"),
+    不是工具故障,不该计入熔断——与门禁拒绝同类(那也是调用方错误、不计熔断)。
+    否则正常的轮询节奏就能把工具熔断掉,连真正的终态都再取不到。"""
+
+    def __init__(self, code: str, message: str = "", retriable: bool = False,
+                 counts_circuit: bool = True):
         super().__init__(message or code)
         self.code = code
         self.message = message or code
         self.retriable = retriable
+        self.counts_circuit = counts_circuit
 
 
 @dataclass
@@ -181,7 +187,8 @@ class ToolRegistry:
                 return ToolResult(ok=True, data=data)
             except ToolError as err:
                 last_err = err
-                circuit.consecutive_failures += 1
+                if err.counts_circuit:
+                    circuit.consecutive_failures += 1
                 self.log.emit("registry", "tool_attempt_failed", call_id=call_id,
                               tool=name, code=err.code, attempt=attempt,
                               retriable=err.retriable)

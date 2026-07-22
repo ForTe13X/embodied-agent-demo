@@ -106,8 +106,11 @@ def register_vla_skill(registry: ToolRegistry, sim_factory: Callable[[], tuple],
         if r is None:
             if server.feedback(p.skill_goal_id) is None:
                 raise ToolError("UNKNOWN_SKILL_GOAL", f"skill goal {p.skill_goal_id} 不存在")
+            # retriable=False:"还没跑完"是调用方【时序】问题,不是工具故障。标 retriable 会让
+            # 注册表把幂等工具自动重试一次(1 次调用记 2 次失败),连续 2 次在飞轮询就把熔断
+            # 计数打到 ≥3 → CIRCUIT_OPEN,此后连真正的终态都再也取不到(复审实测)。
             raise ToolError("SKILL_NOT_FINISHED", "skill 仍在飞,请先轮询 get_skill_feedback",
-                            retriable=True)
+                            retriable=False, counts_circuit=False)
         return r
 
     async def verify_skill_postcondition(p: SkillGoalIdIn) -> dict:
@@ -135,7 +138,9 @@ def register_vla_skill(registry: ToolRegistry, sim_factory: Callable[[], tuple],
     registry.tools["cancel_skill"] = ToolSpec(
         "cancel_skill", SkillGoalIdIn, cancel_skill,
         idempotent=True, required_output_keys=("canceled",))
+    # idempotent=False:查询本身无副作用,但"在飞"会抛错;标幂等会让注册表自动重试、
+    # 把一次调用记成两次失败,加速熔断(见 get_skill_result 里的说明)。
     registry.tools["get_skill_result"] = ToolSpec(
         "get_skill_result", SkillGoalIdIn, get_skill_result,
-        idempotent=True, required_output_keys=("status",))
+        idempotent=False, required_output_keys=("status",))
     return server

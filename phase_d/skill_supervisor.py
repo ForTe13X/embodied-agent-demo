@@ -20,6 +20,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))  # 仓库根(embo
 from embodied_agent.registry import ToolRegistry
 
 POLL_PERIOD_S = 0.005
+CANCEL_CONVERGE_S = 2.0   # cancel 后等待 runtime 收敛成终态的窗口
 
 
 async def _run_once(registry: ToolRegistry, args: dict, *, poll_timeout_s: float) -> dict:
@@ -40,14 +41,25 @@ async def _run_once(registry: ToolRegistry, args: dict, *, poll_timeout_s: float
         if loop.time() - t0 > poll_timeout_s:      # 兜底:在飞太久 → 主动取消,不悬挂
             await registry.call("cancel_skill", {"skill_goal_id": sid},
                                 caller="skill_supervisor")
+            # cancel 只置标志,runtime 要下一次调度才收敛成终态。若此处立刻取 result,
+            # 必然拿到 SKILL_NOT_FINISHED —— 丢掉真实终态、错报错误码(复审实测)。
+            # 故继续轮询到真正终态,并给一个有限的收敛窗口。
+            t_cancel = loop.time()
+            while loop.time() - t_cancel < CANCEL_CONVERGE_S:
+                fb = await registry.call("get_skill_feedback", {"skill_goal_id": sid},
+                                         caller="skill_supervisor", poll=True)
+                if fb.ok and fb.data["status"] != "executing":
+                    break
+                await asyncio.sleep(POLL_PERIOD_S)
             break
         await asyncio.sleep(POLL_PERIOD_S)
 
     res = await registry.call("get_skill_result", {"skill_goal_id": sid},
                               caller="skill_supervisor")
     if not res.ok:
+        # 失败路径同样要带 sid —— 独立后置校验靠它回读末态,而失败恰是最需要独立验证的场合
         return {"status": "failed", "code": res.error["code"], "retriable": False,
-                "terminal_reason": res.error["code"]}
+                "terminal_reason": res.error["code"], "skill_goal_id": sid}
     return res.data
 
 
@@ -77,6 +89,9 @@ async def run_skill_supervised(registry: ToolRegistry, args: dict, *,
             log.emit("skill_supervisor", "retry", attempt=attempt, code=last_code)
             continue
         break
-    log.emit("skill_supervisor", "escalate_exhausted", attempts=max_retries + 1, code=last_code)
-    return {"outcome": "escalated", "attempts": max_retries + 1,
+    # attempts 报【真实尝试次数】:break 路径(不可重试失败)可能只跑了 1 次,
+    # 此前恒报 max_retries+1 会让审计日志高估重试努力(复审实测)。
+    real_attempts = attempt + 1
+    log.emit("skill_supervisor", "escalate_exhausted", attempts=real_attempts, code=last_code)
+    return {"outcome": "escalated", "attempts": real_attempts,
             "code": last_code, "skill_goal_id": last_sid}
