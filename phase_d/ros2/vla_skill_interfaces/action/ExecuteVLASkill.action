@@ -1,0 +1,24 @@
+# ExecuteVLASkill —— D1 异步 goal-handle 契约的 ROS 2 Action 映射(codex 评审:无 ROS2 Action)。
+# 字段与 phase_d/skill_server.py 的 send_goal/feedback/result 严格同构:同一契约、两种传输。
+
+# ---- Goal ----
+string instruction
+string skill_id "tabletop_pick"
+float32 timeout_s 8.0
+# D1 版本化 Policy Contract 上线到 wire:客户端声明期望的契约版本,major 不符 → goal 直接被拒
+# (装载期校验语义搬到接口层,权重换代不靠"跑起来看")
+string policy_contract_version
+---
+# ---- Result ----(与 SkillServer.result() 终态字典同构)
+string status              # succeeded | failed | canceled
+string terminal_reason     # grasped / must_stop:… / no_progress / timeout / canceled
+string code                # VLA_UNSAFE_STOP / VLA_NO_PROGRESS / VLA_TIMEOUT / VLA_CANCELED / ""(成功)
+bool retriable             # 安全停恒 false(Skill Supervisor 据此绝不重试)
+int32 steps
+int32 safety_interventions
+int32 stale_drops
+---
+# ---- Feedback ----(与 SkillServer.feedback() 在飞字典同构)
+int32 steps
+int32 safety_interventions
+int32 stale_drops
