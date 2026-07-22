@@ -44,13 +44,12 @@
   即在真实 Nav2 上跑同一条复合任务(接口不变,Phase B 已证可换)。
 - **VLA 是 mock policy + 运动学 sim**,不训练、不碰真机。
   价值在 runtime / 安全集成 / 可审计。详见 [docs/POSITIONING.md](../docs/POSITIONING.md) 与 [README](README.md)。
-- **"后置校验"目前名不副实(codex 评审,D1 待办)**:`composite_mission.py` 里
-  `manipulation_ok = skill["outcome"] == "succeeded"` 后即 emit `verified=True` ——
-  它**复用 skill 自 report 的成功**,**不是对末态的独立观测**(没有去查 sim 里方块是否真被抓起)。
-  真正的 postcheck 应独立读末态判定。**当前不冒充为独立校验。**
-- **集成契约尚未闭合**:`execute_vla_skill` 是**阻塞调用**(无外部 goal/feedback/cancel)、
-  `_SHIELD_TOKEN` 可 import 故类型边界**可绕过**、composite **未并入正式 LangGraph graph**、
-  无 ROS 2 `ExecuteVLASkill` Action。逐条见 [README 诚实边界](README.md)。
+- **后置校验已改为独立观测(D1 已闭合)**:`verify_skill_postcondition` / `_independent_postcheck`
+  直接回读 sim 末态判定,**不采信 skill 自报的 success**,并记 `skill_reported_success` 与
+  `agrees_with_skill` —— 自报与实测背离本身是高价值审计信号。
+- **集成契约 D1/D2 已闭合**:异步 goal-handle 四工具(在飞可取消)、composite 并入**正式
+  LangGraph graph**、版本化 Policy Contract、ROS 2 `ExecuteVLASkill` Action(容器内实测)。
+  仍成立的边界见 [README 诚实边界](README.md)(令牌为类型级约定、skill 期间不推进世界时钟等)。
 
 ## 意义
 
