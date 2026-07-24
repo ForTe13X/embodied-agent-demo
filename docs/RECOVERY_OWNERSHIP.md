@@ -51,10 +51,10 @@ Phase C 把同一套编排从 mock 底盘搬到真实 ROS 2 / Nav2,`nav_blocked`
 > **learned-skill 三层(VLA 闭环自纠 / Skill Supervisor / Safety Shield)已在 Phase D 纯仿真落地
 > (🟡)**——mock policy + 运动学 sim,不训练、不碰真机。**仍 ⬜ 的是**:真实视觉纠正、真实硬件安全量。
 >
-> **诚实标注(integration contract 尚未闭合)**:Phase D 目前是**垂直切片**,不是完整集成契约——
-> `execute_vla_skill` 在注册表里是**阻塞调用**(无外部 goal/feedback/cancel)、`_SHIELD_TOKEN` 可 import
-> 因而结构边界可绕、postcheck 复用 skill 自report 的 success、composite 未并入正式 LangGraph graph、
-> 无 ROS 2 `ExecuteVLASkill` Action。这些是 D1/D2 的工作,**不冒充为已完成**。
+> **集成契约:D1/D2 已闭合**(PR #16/#17)——异步 goal-handle 四工具、独立后置校验、composite 并入
+> 正式 LangGraph graph、版本化 Policy Contract、ROS 2 `ExecuteVLASkill` Action(容器内实测)。
+> **仍成立的边界**:shield 令牌是类型级约定非进程隔离;宿主 registry 接 in-process SkillServer;
+> **skill 期间不推进虚拟世界时钟**(操作中不耗电、不触发故障注入/低电量抢占,属 mock 语义边界)。
 
 ## 3. 反模式(明确禁止)
 
@@ -71,6 +71,11 @@ Phase C 把同一套编排从 mock 底盘搬到真实 ROS 2 / Nav2,`nav_blocked`
   与 `faults.yaml` 的 `expected_recovery_chain` 一致,进事件日志供审计。
 - 归属边界:`exception_manager` 只处理**上浮到编排层的** fault;导航层自己消化的(如真实 Nav2
   改道)编排层根本收不到——**这正是"就近原则"在起作用的证据,而非漏检**。
-- 下一步(Phase D):新增一个 `recovery_router`,在故障进入编排恢复链之前先判"这该不该由我这层
-  管";learned-skill 的 fault(抓取失败等)先给 Skill Supervisor,超出其能力再上浮。见
-  [POSITIONING.md](POSITIONING.md) 的路线图。
+- **已实现(D1/D2)**:learned-skill 的 fault 先由 [`skill_supervisor.py`](../phase_d/skill_supervisor.py)
+  处理(可重试失败重试 N 次、安全停**绝不重试**),超出其能力才上浮编排层;编排层侧新增
+  `SKILL_UNSAFE`/`SKILL_FAILED` 两类与其恢复链([`recovery.py`](../embodied_agent/recovery.py))。
+  **归属边界(刻意)**:两类在编排层**都不重试**——能上浮就说明 skill 那层已尽力,编排层只降级跳过,
+  否则就是本文件 §3 明令禁止的"两层抢救同一个错误"。
+  **注意**:正式 graph 路径([`graph.py`](../embodied_agent/graph.py))直接调四个 skill 工具,
+  **不经 Skill Supervisor** —— 故 graph 里可重试的 `VLA_NO_PROGRESS`/`VLA_TIMEOUT` 一次都不重试、
+  直接降级。`skill_supervisor` 目前只用于 `composite_mission.py` 这条旧壳子路径。如实标注,不含糊。

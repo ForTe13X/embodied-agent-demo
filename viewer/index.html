@@ -114,13 +114,20 @@ const FEED_TYPES = new Set(["run_start","plan_built","fault_armed","fault_activa
   "goal_finished","watchdog_triggered","fault_classified","candidates_enumerated","candidate_chosen",
   "recovery_applied","queue_snapshot","queue_resumed","hitl_request","hitl_decision","guardrail_rejection",
   "circuit_open","token_consumed","finding_reported","step_skipped","violation","run_summary","attempt",
-  "transit_guard_stop"]);
+  "transit_guard_stop",
+  // Phase D VLA skill(复合任务日志;90-run 不含这些步,故常规回放里不出现)
+  "skill_goal_accepted","skill_cancel_requested","verify_manipulation",
+  "verify_disagrees_with_skill","emergency_stop","safety_clamped","chunk_rejected",
+  "skill_ok","retry","escalate_unsafe","escalate_exhausted"]);
 const CLS = {fault_injector:"injector", safety_monitor:"safety", exception_manager:"exc",
   replanner:"replan", hitl:"hitl", reporter:"done"};
 // 高信号事件按【事件语义】上色,优先于 actor——registry/observer 这些 actor 会同时发普通与安全
 // 事件,只按 actor 上色会让"🛡拦截""发现异常""熔断"这类拿不到高亮(post-merge 审计)
 const EVENT_CLS = {guardrail_rejection:"safety", circuit_open:"exc",
-  watchdog_triggered:"exc", finding_reported:"done", transit_guard_stop:"safety"};
+  watchdog_triggered:"exc", finding_reported:"done", transit_guard_stop:"safety",
+  emergency_stop:"safety", verify_disagrees_with_skill:"safety", escalate_unsafe:"safety",
+  safety_clamped:"exc", chunk_rejected:"exc", retry:"replan", escalate_exhausted:"exc",
+  verify_manipulation:"done", skill_ok:"done"};
 
 // ---- 人话映射(默认给外行观众看;技术观众可勾"原始日志"看裸事件)----
 const EVENT_LABELS = {
@@ -134,6 +141,11 @@ const EVENT_LABELS = {
   finding_reported:"上报发现", step_skipped:"跳过该步", violation:"⚠ 越界(安全违规)",
   run_summary:"任务结束汇总", attempt:"越权尝试(被拦)",
   transit_guard_stop:"🛑 越界拦停:实际路径闯入禁区/未授权受限区",
+  skill_goal_accepted:"接受操作任务(VLA skill)", skill_cancel_requested:"请求取消操作",
+  verify_manipulation:"独立校验操作结果", verify_disagrees_with_skill:"⚠ 自报与实测不符",
+  emergency_stop:"🛑 安全急停(动作越界)", safety_clamped:"安全限幅(已修正动作)",
+  chunk_rejected:"丢弃不合契约的动作块", skill_ok:"操作成功",
+  retry:"重试操作", escalate_unsafe:"安全停,上浮不重试", escalate_exhausted:"重试耗尽,上浮",
 };
 const OUTCOME_LABELS = {
   completed_full:"完整完成 ✓", completed:"完成 ✓",

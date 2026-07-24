@@ -36,6 +36,22 @@ flowchart LR
 | `return_to_dock` | — | ✗ | `{"goal_id":"goal-6"}`(dock 目标豁免电量闸) |
 | `ask_human_confirmation` | `message`,`scope` | ✗ | 批准:`{"approved":true,"approval_token":"tok-1"}`;拒绝/超时:`{"approved":false}` |
 
+### 2.0 VLA skill 工具(Phase D,`register_vla_skill` 注册进同一 registry)
+
+与 `navigate_to` **同构的异步 goal-handle**:派发立即返回句柄,在飞可轮询/取消,终态后取结果。
+走同一条门禁路径(白名单 → schema `extra=forbid` → 熔断 → 事件日志)。
+
+| 工具 | 入参 | 幂等 | 成功输出 |
+|---|---|:---:|---|
+| `execute_vla_skill` | `instruction`,`skill_id?`,`timeout_s?` | ✗ | `{"skill_goal_id":"skill-1"}`(立即返回,不阻塞) |
+| `get_skill_feedback` | `skill_goal_id` | ✓ | `{"status":"executing","steps":7,"safety_interventions":0,"stale_drops":0}` |
+| `cancel_skill` | `skill_goal_id` | ✓ | `{"canceled":true}`(已终态时 `false`) |
+| `get_skill_result` | `skill_goal_id` | ✗ | `{"status":"succeeded|failed","terminal_reason":"grasped","code":null,"retriable":false,…}` |
+| `verify_skill_postcondition` | `skill_goal_id` | ✓ | `{"verified":true,"method":"independent_sim_readback","block_grasped":true,"skill_reported_success":true,"agrees_with_skill":true}` |
+
+**独立后置校验**:`verify_skill_postcondition` 回读末态,**不采信 skill 自报的 success**;
+`agrees_with_skill=false`(自报与实测背离)本身是高价值审计信号。
+
 ### 2.1 错误码(error.code)
 
 | 码 | 含义 | 计入熔断 |
@@ -48,6 +64,10 @@ flowchart LR
 | `TIMEOUT` / `SCHEMA_VIOLATION_OUT` | 执行超时 / 输出缺字段(可重试,幂等工具自动重试 1 次) | ✓ |
 | `CIRCUIT_OPEN` | 连续失败 ≥3 已熔断,本 run 不再调用 | — |
 | `NAV_BUSY` | 已有在飞目标 | ✓ |
+| `SKILL_BUSY` | 已有在飞 skill goal | ✓ |
+| `UNKNOWN_SKILL_GOAL` | skill 句柄不存在 | ✓ |
+| `SKILL_NOT_FINISHED` | skill 仍在飞就来取 result | ✗(**调用方时序错误**,与门禁拒绝同类,不计熔断) |
+| `VLA_UNSAFE_STOP` / `VLA_NO_PROGRESS` / `VLA_TIMEOUT` / `VLA_CANCELED` | skill 终态原因(经 `get_skill_result` 的 `code` 返回,非 ToolError) | — |
 | `EVIDENCE_UNVERIFIED` | `report_finding` 证据不可溯源(image_id 无捕获记录 / node 越拓扑 / 与拍摄节点不符) | ✗(调用方错误,不可重试) |
 
 ### 2.2 审批 token 生命周期
@@ -117,7 +137,7 @@ Phase B 止损线见 [ADAPTER_CONTRACT.md](ADAPTER_CONTRACT.md)。
 ```
 
 - 无墙钟时间;同 seed 逐字节一致(LF 换行,含跨平台);
-- actor ∈ planner/executor/observer/exception_manager/replanner/reporter/registry/server/safety_monitor/safety_runtime/hitl/fault_injector/harness/malicious_planner;
+- actor ∈ planner/executor/observer/exception_manager/replanner/reporter/registry/server/safety_monitor/safety_runtime/hitl/fault_injector/harness/malicious_planner/vla_skill/vla_skill_runtime/skill_supervisor/postcheck;
 - 违规、节点进入、目标启动由 `safety_monitor`(注册表之下)独立记录——指标不读 agent 自报;
 - **`safety_runtime` / `transit_guard_stop`(F-01 运行期访问围栏)**:机器人实际位置踏入未授权受限/
   禁入区时发射(`payload{goal_id,node,kind,access}`,kind ∈ `unauthorized_restricted_transit`/`forbidden_transit`),

@@ -55,7 +55,7 @@ learned skill(如 VLA)  图像 + 指令 + 本体状态 → 连续动作序列(ac
 
 | 鸿沟 | 含义 | 本项目对应机制 |
 |---|---|---|
-| **Semantic Gap** | 人类目标 ↔ 机器人 API | Intent 解析 + skill 队列(`navigate_to` / `perceive`;`execute_vla_skill` 已在 Phase D 仿真注册进同一 registry,尚未并入正式 LangGraph graph) |
+| **Semantic Gap** | 人类目标 ↔ 机器人 API | Intent 解析 + skill 队列(`navigate_to` / `perceive`;`execute_vla_skill` 已并入正式 LangGraph graph(D2)) |
 | **Reliability Gap** | 概率性模型输出 ↔ 可执行系统 | Tool Registry:schema / 白名单 / 幂等重试 / 熔断 / 审批 token / 电量闸 |
 | **Iteration Gap** | 失败一次 ↔ 系统变好 | append-only 事件日志(每决策一条,可回放、可证伪)→ 失败数据飞轮的地基 |
 
@@ -83,18 +83,19 @@ learned skill(如 VLA)  图像 + 指令 + 本体状态 → 连续动作序列(ac
 标准路线。但岗位价值的核心是**运行时**(把 learned policy 变得可调用 / 可约束 / 可取消 / 可恢复 /
 可审计),这部分能在仿真里完整证明——和当初用 mock nav server 证明 adapter 契约是同一个动作。
 
-- **Phase D(✅ 已完成,纯仿真;垂直切片非完整契约)**:`execute_vla_skill` 一个 skill(不是几十个低层动作)+
+- **Phase D(✅ 已完成,纯仿真;D1/D2 集成契约已闭合)**:`execute_vla_skill` 一个 skill(不是几十个低层动作)+
   异步 action-chunk runtime(inference/execution 并行、stale-chunk 丢弃、queue 空→hold、
   cancel 使旧结果失效)+ **独立 Safety Shield**(确定性 action projection:workspace /
-  velocity / magnitude limit,结构性保证 policy 绕不过它)+ mock VLA policy(桌面 pick 玩具)。
+  velocity / magnitude limit;沿 runtime 执行路径 policy 绕不过它)+ mock VLA policy(桌面 pick 玩具)。
   挂在**现有** Tool Registry / exception_manager / event log 下。**证明"安全监管一个 learned
   policy"这条主张,不需要真机。**
-  **诚实边界(integration contract 尚未闭合,D1/D2 待办)**:当前是**垂直切片**——
-  `execute_vla_skill` 在注册表里是**阻塞调用**(`await rt.execute(goal)`,无外部 goal/feedback/cancel,
-  与 `navigate_to` 的异步 goal-handle 契约不对等)、`_SHIELD_TOKEN` 可 import 故结构边界**可绕过**、
-  postcheck 复用 skill 自 report 的 success 而非独立观测、composite 任务走独立壳子**未并入正式
-  LangGraph graph**、无 ROS 2 `ExecuteVLASkill` Action、policy 为 mock(真实 policy 可能阻塞事件循环)。
-  **不冒充为完整集成契约。**
+  **集成契约:D1/D2 已闭合**(PR #16/#17)——异步 goal-handle 四工具(在飞可取消)、
+   独立后置校验(回读末态、记 `agrees_with_skill`)、composite 并入**正式 LangGraph graph**、
+   版本化 Policy Contract(action/execution horizon + 逐动作新鲜度)、ROS 2 `ExecuteVLASkill`
+   Action(容器内 colcon 构建 + smoke 实测)。**仍然成立的边界**:shield 令牌加固只关掉了
+   "一行 import 就能伪造"的洞,同进程 Python 仍非不可绕过(类型级约定,非进程隔离);
+   宿主 registry 接的仍是 in-process SkillServer;**skill 执行期间不推进虚拟世界时钟**
+   (mock 无操作能耗模型 ⇒ 操作中不耗电、不触发故障注入/低电量抢占)。
 - **Phase E+(需要硬件才做)**:真臂 + 遥操作数据 + SmolVLA/ACT 微调 + 真实闭环 eval +
   intervention 数据飞轮。属未来,不在当前范围。
 

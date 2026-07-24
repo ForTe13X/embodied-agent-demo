@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>vla_skill_interfaces</name>
+  <version>0.1.0</version>
+  <description>ExecuteVLASkill action —— Phase D 异步 skill goal-handle 契约的 ROS 2 接口(纯接口包,无节点)</description>
+  <maintainer email="forte13x@gmail.com">yp</maintainer>
+  <license>MIT</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <buildtool_depend>rosidl_default_generators</buildtool_depend>
+  <exec_depend>rosidl_default_runtime</exec_depend>
+  <depend>action_msgs</depend>
+  <member_of_group>rosidl_interface_packages</member_of_group>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

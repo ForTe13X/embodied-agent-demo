@@ -24,20 +24,20 @@ VLA 是挂在编排层下面的**一类 learned skill**,不是整个系统。它
 ## 跑
 
 ```powershell
-.\.venv\Scripts\python -m pytest phase_d -q      # 18 项:安全核心 + 异步运行时 + 复合任务
+.\.venv\Scripts\python -m pytest phase_d -q      # 49 项:安全核心 + 契约 + 异步 skill server + 复合任务 + graph 集成
 .\.venv\Scripts\python phase_d\demo.py            # 6 场景汇总(含对抗)
 ```
 
 `demo.py` 输出(实测):
 
-| 场景 | 成功 | 终态 | 安全夹取 | 过期丢弃 | 末端在盒内 |
-|---|---|---|---|---|---|
-| nominal | 是 | grasped | 0 | 0 | ✓ |
-| out_of_bounds | 否 | must_stop:translation_hard_stop | 0 | 0 | ✓ |
-| nan | 否 | must_stop:non_finite_action | 0 | 0 | ✓ |
-| jitter | 是 | grasped | 68 | 0 | ✓ |
-| stale(高延迟) | 否 | timeout | 0 | 4 | ✓ |
-| cancel | 否 | canceled | 0 | 0 | ✓ |
+| 场景 | 成功 | 终态 | 安全夹取 | 过期丢弃 | 步数 | 末端在盒内 |
+|---|---|---|---|---|---|---|
+| nominal | 是 | grasped | 0 | 0 | 23 | ✓ |
+| out_of_bounds | 否 | must_stop:translation_hard_stop | 0 | 0 | 2 | ✓ |
+| nan | 否 | must_stop:non_finite_action | 0 | 0 | 2 | ✓ |
+| jitter | 是 | grasped | 68 | 0 | 69 | ✓ |
+| stale(高延迟) | 否 | timeout | 0 | 5 | 0 | ✓ |
+| cancel | 否 | canceled | 0 | 0 | 5 | ✓ |
 
 **关键不变量:无论 policy 多离谱,末端永远在 workspace 内 —— 沿 runtime 执行路径,policy 绕不过安全投影。**
 
@@ -46,14 +46,24 @@ VLA 是挂在编排层下面的**一类 learned skill**,不是整个系统。它
 - **不是真 VLA**:mock policy 是确定性桩,不训练、不看图像;真实 VLA 换到 `predict_chunk` 同签名即可接。
 - **不是物理仿真**:运动学 sim,不模拟接触力/摩擦/碰撞动力学。
 - 价值在 **runtime / 安全集成 / 可审计**,不是操作物理或模型能力。详见 [docs/POSITIONING.md](../docs/POSITIONING.md)。
-- **集成契约尚未闭合(垂直切片,非完整契约)**——以下为 D1/D2 待办,**不冒充为已完成**:
-  - `execute_vla_skill` 在注册表里是**阻塞调用**(`await rt.execute(goal)`),**无外部 goal/feedback/cancel**,
-    与 `navigate_to` 的异步 goal-handle 契约**不对等**;真实 policy 还可能阻塞事件循环。
-  - `SafeAction` 的"结构性保证"是**同进程内约定**:`_SHIELD_TOKEN` 可被 `from action_types import _SHIELD_TOKEN`
-    取到并伪造 `SafeAction`,**不是不可绕过的安全边界**(上面那条不变量只在"policy 走 runtime 执行路径"下成立)。
-  - postcheck **复用 skill 自 report 的 success**,不是对末态的**独立观测**。
-  - composite 走独立壳子,**未并入正式 LangGraph graph**;无 ROS 2 `ExecuteVLASkill` Action。
-  - action/execution horizon 与 sensor freshness 语义待校正。
+- **集成契约:D1/D2 已闭合**(PR #16/#17;下列曾经的缺口逐条已补,**实现文件可核对**):
+  - ✅ 异步 goal-handle:[`skill_server.py`](skill_server.py) + 四工具 `execute_vla_skill` /
+    `get_skill_feedback` / `cancel_skill` / `get_skill_result`(与 `navigate_to` 同构,在飞可取消);
+    policy 推理走 `asyncio.to_thread`,不阻塞事件循环。
+  - ✅ 独立后置校验:`verify_skill_postcondition` 回读 sim 末态,不采信 skill 自报,并记
+    `agrees_with_skill`(自报与实测背离本身是审计信号)。
+  - ✅ composite 并入**正式 LangGraph graph**:[`graph.py`](../embodied_agent/graph.py) 的
+    `vla_skill` 步 + observer 轮询 + `SKILL_UNSAFE`/`SKILL_FAILED` 恢复归属。
+  - ✅ horizon / freshness 语义:[`policy_contract.py`](policy_contract.py) 钉死 action/execution
+    horizon 与**逐动作**新鲜度(交付预算 vs 执行预算分开)。
+  - ✅ ROS 2 `ExecuteVLASkill` Action:[`ros2/`](ros2/),容器内 colcon 构建 + 四场景 smoke 实测通过。
+- **仍然成立的边界(**不冒充已解决**)**:
+  - `SafeAction` 的令牌加固只关掉了"一行 `import` 就能伪造"这个洞(令牌改每 shield 实例私有);
+    同进程 Python **仍不存在不可绕过的边界** —— 这是**类型级约定**,不是安全隔离,真正不可绕需**进程隔离**。
+  - 宿主 registry 的 `execute_vla_skill` 接的仍是 **in-process** `SkillServer`;切到 ROS 2 ActionClient
+    是 adapter 层的后续接线。
+  - **skill 执行期间不推进虚拟世界时钟**(mock 世界建模导航、无操作能耗模型)⇒ 操作过程中电量不衰减、
+    故障注入不触发、低电量抢占不会发生。这是 mock 语义边界,不是真实机器人行为。
 
 ## Phase D-2:端到端复合任务(已完成)
 
@@ -70,17 +80,16 @@ VLA 是挂在编排层下面的**一类 learned skill**,不是整个系统。它
 ```powershell
 .\.venv\Scripts\python phase_d\composite_mission.py baseline     # 单条件跑
 .\.venv\Scripts\python phase_d\run_composite_eval.py             # 3 条件预注册评测 + 审计日志
-.\.venv\Scripts\python -m pytest phase_d -q                       # 全部 18 项
+.\.venv\Scripts\python -m pytest phase_d -q                       # 全部 49 项
 ```
 
 完整结果与逐条解读:[PHASE_D_RESULTS.md](PHASE_D_RESULTS.md)。
 
-## 下一步 D1/D2(**不需硬件**,当前最大工程缺口)
+## D1/D2(已完成,**不需硬件**)
 
-把上面"集成契约尚未闭合"逐条补上——这些**都不需要真机**,是可管理、可停止的 skill 边界:
-版本化 Policy Contract → `execute_vla_skill` 真正的异步 goal/feedback/cancel/result(+ ROS 2
-`ExecuteVLASkill` Action)→ 不可绕过的 shield 边界 + 独立 postcheck + horizon/freshness 语义 →
-composite 并入正式 LangGraph graph。
+"可管理、可停止的 skill 边界"已落地:版本化 Policy Contract → 异步 goal/feedback/cancel/result
+(含 ROS 2 `ExecuteVLASkill` Action,容器内实测)→ shield 令牌加固 + 独立 postcheck +
+horizon/freshness 语义 → composite 并入正式 LangGraph graph。逐条实现见上面「诚实边界」。
 
 ## 再下一步(**需硬件**,Phase E+)
 

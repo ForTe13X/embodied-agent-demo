@@ -179,8 +179,9 @@ def build_graph(rt: Runtime):
                                         tool="execute_vla_skill",
                                         code=res.error["code"], step_idx=i),
                         "route": "except"}
+            # 看门狗用墙钟(skill 是实时的),故不写 tick;每步可自带 watchdog_s 覆盖默认值。
             return {"active_skill_goal": res.data["skill_goal_id"],
-                    "skill_started_tick": rt.clock.tick, "route": "observe"}
+                    "skill_watchdog_s": step.get("watchdog_s"), "route": "observe"}
 
         if kind == "wait_charged":
             return {"waiting_charge": True, "route": "observe"}
@@ -199,7 +200,11 @@ def build_graph(rt: Runtime):
             # 观察者会在 skill 还没跑几步时就把虚拟预算烧光而误判超时 —— 故这里的兜底用墙钟,
             # 且每轮让出一点真实时间给 skill 的控制环推进。skill 自身也有 timeout,这层只是兜底。
             t_start = time.monotonic()
-            budget_s = float(state.get("skill_watchdog_s") or 30.0)
+            # 兜底预算必须【宽于 skill 自身 timeout】,否则会在 skill 还没用完自己的预算时
+            # 把它掐死并误分类成 SKILL_WATCHDOG_TIMEOUT(复审实测:timeout_s>30 必被误杀)。
+            step_now = state["queue"][state["queue_idx"]]
+            budget_s = float(state.get("skill_watchdog_s")
+                             or (float(step_now.get("timeout_s", 8.0)) * 2 + 10.0))
             while True:
                 # 只让出真实时间给 skill 的控制环,**不**按轮询频率推进虚拟世界:
                 # 否则 5s 的 skill × 5ms 轮询 = 上千个虚拟 tick 的耗电,机器人会在操作中"电量耗尽"
@@ -211,10 +216,16 @@ def build_graph(rt: Runtime):
                 if not fb_res.ok:
                     poll_failures += 1
                     if poll_failures >= 3:
+                        # 放弃轮询前必须先取消:否则 skill 变成孤儿——后台继续动、继续改 sim、
+                        # 继续写日志,且在飞锁不释放(复审实测)。看门狗路径本来就 cancel,
+                        # 这条路径漏了,属明显疏漏。
+                        await reg.call("cancel_skill", {"skill_goal_id": sid},
+                                       caller="observer")
                         return {"active_skill_goal": None,
                                 "fault": _fault(FaultClass.SKILL_FAILED,
                                                 tool="get_skill_feedback",
-                                                code="POLL_FAILED"),
+                                                code="POLL_FAILED",
+                                                step_idx=state["queue_idx"]),
                                 "route": "except"}
                     continue
                 poll_failures = 0
@@ -225,7 +236,8 @@ def build_graph(rt: Runtime):
                                        caller="observer")
                         return {"active_skill_goal": None,
                                 "fault": _fault(FaultClass.SKILL_FAILED,
-                                                code="SKILL_WATCHDOG_TIMEOUT"),
+                                                code="SKILL_WATCHDOG_TIMEOUT",
+                                                step_idx=state["queue_idx"]),
                                 "route": "except"}
                     continue
 
@@ -235,7 +247,8 @@ def build_graph(rt: Runtime):
                     return {"active_skill_goal": None,
                             "fault": _fault(FaultClass.SKILL_FAILED,
                                             tool="get_skill_result",
-                                            code=r.error["code"]),
+                                            code=r.error["code"],
+                                            step_idx=state["queue_idx"]),
                             "route": "except"}
                 # 【独立后置校验】不采信 skill 自报:回读末态,并记录是否与自报一致
                 pc = await reg.call("verify_skill_postcondition", {"skill_goal_id": sid},
@@ -257,7 +270,8 @@ def build_graph(rt: Runtime):
                 return {"active_skill_goal": None, "skill_postcheck": evidence,
                         "fault": _fault(fclass, code=r.data.get("code"),
                                         reason=r.data.get("terminal_reason"),
-                                        verified=evidence.get("verified")),
+                                        verified=evidence.get("verified"),
+                                        step_idx=state["queue_idx"]),
                         "route": "except"}
 
         if state.get("waiting_charge"):
@@ -356,7 +370,11 @@ def build_graph(rt: Runtime):
         直接跳到链尾,得不到替代点机会)。实例判别:节点/边/工具;
         传感器与低电量保持类级(全局状态,升级语义正确)。"""
         instance = ""
-        if fclass in (FaultClass.NAV_BLOCKED, FaultClass.NAV_UNREACHABLE):
+        if fclass in (FaultClass.SKILL_FAILED, FaultClass.SKILL_UNSAFE):
+            # 按队列步实例计数:不同 vla_skill 步是不同故障实例,共享计数会让第 N 个步骤
+            # 一出错就 recovery_exhausted → 直接 abort_to_dock(复审实测)。
+            instance = str(context.get("step_idx", ""))
+        elif fclass in (FaultClass.NAV_BLOCKED, FaultClass.NAV_UNREACHABLE):
             instance = str(context.get("node") or context.get("edge") or "")
         elif fclass is FaultClass.TOOL_FAILURE:
             instance = str(context.get("tool") or "")
